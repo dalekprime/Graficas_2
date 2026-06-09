@@ -1,0 +1,91 @@
+#include "Texture.h"
+
+Texture::Texture(const char* image, texType texType, GLuint slot, GLenum format) {
+	type = texType;
+	path = image;
+	int width, height, nrChannels;
+	//Indica que la imagen se debe leer al revez
+	stbi_set_flip_vertically_on_load(true);
+	unsigned char* data = stbi_load(image, &width, &height, &nrChannels, 0);
+	if (data) {
+		GLenum formatDetected = format;
+		GLenum internalFormat = GL_RGB8;
+		if (nrChannels == 1) {
+			formatDetected = GL_RED;
+			internalFormat = GL_R8;
+		}
+		else if (nrChannels == 3) {
+			formatDetected = GL_RGB;
+			internalFormat = (type == ALBEDO) ? GL_SRGB8 : GL_RGB8;
+		}
+		else if (nrChannels == 4) {
+			formatDetected = GL_RGBA;
+			internalFormat = (type == ALBEDO) ? GL_SRGB8_ALPHA8 : GL_RGBA8;
+		}
+		//Crea el espacio para la textura
+		glCreateTextures(GL_TEXTURE_2D, 1, &ID);
+		// Calcula el número de mipmaps posibles
+		GLsizei mipLevels = (GLsizei)log2(std::max(width, height)) + 1;
+		//Reserva el espacio de memoria para la textura
+		glTextureStorage2D(ID, mipLevels, internalFormat, width, height);
+		//Envia la textura a la GPU
+		glTextureSubImage2D(ID, 0, 0, 0, width, height, formatDetected, GL_UNSIGNED_BYTE, data);
+		//Colocan los parametros de textura
+		glTextureParameteri(ID, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
+		glTextureParameteri(ID, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTextureParameteri(ID, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTextureParameteri(ID, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		//Genera los Mipmaps
+		glGenerateTextureMipmap(ID);
+		stbi_image_free(data);
+	}
+	else {
+		std::cerr << "Failed to load texture: " << image << std::endl;
+	}
+}
+
+Texture::Texture(const unsigned char* data, int width, int height, int nrChannels, texType texType) {
+	type = texType;
+	if (data) {
+		GLenum formatDetected = GL_RGB;
+		GLenum internalFormat = GL_RGB8;
+		if (nrChannels == 1) {
+			formatDetected = GL_RED;
+			internalFormat = GL_R8;
+		}
+		else if (nrChannels == 3) {
+			formatDetected = GL_RGB;
+			internalFormat = (type == ALBEDO) ? GL_SRGB8 : GL_RGB8;
+		}
+		else if (nrChannels == 4) {
+			formatDetected = GL_RGBA;
+			internalFormat = (type == ALBEDO) ? GL_SRGB8_ALPHA8 : GL_RGBA8;
+		}
+		glCreateTextures(GL_TEXTURE_2D, 1, &ID);
+		GLsizei mipLevels = (GLsizei)std::log2(std::max(width, height)) + 1;
+		glTextureStorage2D(ID, mipLevels, internalFormat, width, height);
+		glTextureSubImage2D(ID, 0, 0, 0, width, height, formatDetected, GL_UNSIGNED_BYTE, data);
+		glTextureParameteri(ID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTextureParameteri(ID, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glTextureParameteri(ID, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTextureParameteri(ID, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		glGenerateTextureMipmap(ID);
+	}
+	else {
+		std::cerr << "Failed to load texture from memory" << std::endl;
+	}
+}
+
+void Texture::Bind(GLuint unit) {
+	glBindTextureUnit(unit, ID);
+}
+
+void Texture::Unbind(GLuint unit) {
+	glBindTextureUnit(unit, 0);
+}
+
+void Texture::Delete() {
+	if (ID != 0) {
+		glDeleteTextures(1, &ID);
+	}
+}

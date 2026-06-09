@@ -1,5 +1,31 @@
 ﻿# Add source to this project's executable.
-add_executable (Graficas_2 "src/Graficas_2.cpp" "src/Graficas_2.h")
+add_executable (Graficas_2 "src/Graficas_2.h"  "src/Graficas_2.cpp"
+                           "src/Shader.h" "src/Shader.cpp" 
+                           "src/BuffersManagement/VBO.h" "src/BuffersManagement/VBO.cpp" 
+                           "src/BuffersManagement/VAO.h" "src/BuffersManagement/VAO.cpp"  
+                           "src/BuffersManagement/EBO.h" "src/BuffersManagement/EBO.cpp" 
+                           "src/ModelManagement/Node.h" "src/ModelManagement/Node.cpp" 
+                           "src/ModelManagement/Scene.h" "src/ModelManagement/Scene.cpp" 
+                           "src/ModelManagement/Texture.h" "src/ModelManagement/Texture.cpp"
+                           "src/ModelManagement/Solid.h" "src/ModelManagement/Solid.cpp"
+                           "src/CameraManagement/Camera.h" "src/CameraManagement/Camera.cpp" 
+                           "src/CameraManagement/Ray.h" "src/CameraManagement/Ray.cpp"
+                           "${CMAKE_SOURCE_DIR}/assets/shaders/standardShader.vert"
+                           "${CMAKE_SOURCE_DIR}/assets/shaders/flatShader.frag"
+                           "${CMAKE_SOURCE_DIR}/assets/shaders/lambertShader.frag"
+                           "${CMAKE_SOURCE_DIR}/assets/shaders/phongShader.frag"
+                           "${CMAKE_SOURCE_DIR}/assets/shaders/blinnPhongShader.frag"
+                           "${CMAKE_SOURCE_DIR}/assets/shaders/pbrShader.frag"
+                           "${CMAKE_SOURCE_DIR}/assets/shaders/lineShader.frag"
+                           "${CMAKE_SOURCE_DIR}/assets/shaders/RTShader.frag"
+)
+
+add_custom_command(
+    TARGET Graficas_2 POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/assets"
+        "${CMAKE_CURRENT_BINARY_DIR}/assets"
+)
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET Graficas_2 PROPERTY CXX_STANDARD 20)
