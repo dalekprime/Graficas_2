@@ -66,7 +66,7 @@ void MainEngine::SetupWindow() {
 	// Agregar plano de suelo dinamico
 	actualScene->AddRootNode(Solid::GeneratePlane(10.0f));
     //Shadows
-    shadowEngine = std::make_unique<ShadowEngine>(PLANAR);
+    shadowEngine = std::make_unique<ShadowEngine>(MAPPING);
 	// Inicializar ImGui
     IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -177,6 +177,12 @@ void MainEngine::MainLoop() {
 			//Actualizar matemáticas y dibujar
 			actualScene->UpdateScene();
 			actualScene->RenderRaytraced(*actualShader, *actualCamera, actualScene->lights);
+            glClear(GL_DEPTH_BUFFER_BIT);
+            if (pickingRay->hasHit) {
+                pickingRay->Draw(*unlitShader, *actualCamera);
+            }
+            actualCamera->matrix(*unlitShader);
+            actualScene->DrawLightGizmos(*unlitShader);
 		} else {
 			if (lightModel == 0) actualShader = flatShader.get();
 			else if (lightModel == 1) actualShader = lambertShader.get();
@@ -202,10 +208,21 @@ void MainEngine::MainLoop() {
 			}
 			//Seleccion
 			actualShader->SetVec3("uHighlightColor", rayColor);
-			//Actualizar matemáticas y dibujar
-			actualScene->UpdateScene();
-			actualScene->Draw(*actualShader, *actualCamera, false);
-			shadowEngine->RenderSceneWithShadows(*actualScene, *actualCamera, *actualShader);
+			//Actualizar matemáticas
+            actualScene->UpdateScene();
+            //Sombras
+            if (shadowModel == 0) {
+                actualShader->SetInt("shadowType", 0);
+                actualScene->Draw(*actualShader, *actualCamera, false);
+			    shadowEngine->RenderSceneWithShadows(*actualScene, *actualCamera, *actualShader);
+            } else if (shadowModel == 1) {
+                actualShader->SetInt("shadowType", 1);
+                shadowEngine->RenderSceneWithShadows(*actualScene, *actualCamera, *actualShader);
+                glViewport(0, 0, width, height);
+                actualScene->Draw(*actualShader, *actualCamera, false);
+            } else if (shadowModel == 2) {
+                //Por hacer
+            }
 		}
 
 		if (pickingRay->hasHit) {
@@ -238,22 +255,45 @@ void MainEngine::DrawUI() {
     //VENTANA PRINCIPAL
     ImGui::Begin("Controles Graficas 2");
     ImGui::Text("Iluminacion y Materiales");
-    ImGui::Text("Modelo de Iluminacion");
-    ImGui::RadioButton("Flat", &lightModel, 0); ImGui::SameLine();
-    ImGui::RadioButton("Lambert", &lightModel, 1); ImGui::SameLine();
-    ImGui::RadioButton("Phong", &lightModel, 2); ImGui::SameLine();
-    ImGui::RadioButton("Blinn-Phong", &lightModel, 3); ImGui::SameLine();
-    ImGui::RadioButton("PBR", &lightModel, 4);
+    
+    if (actualCamera->type != CameraType::RAYTRACING) {
+        ImGui::Text("Modelo de Iluminacion");
+        ImGui::RadioButton("Flat", &lightModel, 0); ImGui::SameLine();
+        ImGui::RadioButton("Lambert", &lightModel, 1); ImGui::SameLine();
+        ImGui::RadioButton("Phong", &lightModel, 2); ImGui::SameLine();
+        ImGui::RadioButton("Blinn-Phong", &lightModel, 3); ImGui::SameLine();
+        ImGui::RadioButton("PBR", &lightModel, 4);
 
-    ImGui::Separator();
-    ImGui::Text("Tipo de Sombras");
-    if (ImGui::RadioButton("Planar", &shadowModel, 0)) shadowEngine->SetShadowType(PLANAR); ImGui::SameLine();
-    if (ImGui::RadioButton("Mapping", &shadowModel, 1)) shadowEngine->SetShadowType(MAPPING); ImGui::SameLine();
-    if (ImGui::RadioButton("Volumen", &shadowModel, 2)) shadowEngine->SetShadowType(VOLUMEN);
-    if (shadowModel == 0) {
-        ImGui::Text("Altura Planar");
-        ImGui::DragFloat("Altura", &(shadowEngine->groundHeight), 0.05f, -10.0f, 10.0f);
+        ImGui::Separator();
+        ImGui::Text("Tipo de Sombras");
+        if (ImGui::RadioButton("Planar", &shadowModel, 0)) shadowEngine->SetShadowType(PLANAR); ImGui::SameLine();
+        if (ImGui::RadioButton("Mapping", &shadowModel, 1)) shadowEngine->SetShadowType(MAPPING); ImGui::SameLine();
+        if (ImGui::RadioButton("Volumen", &shadowModel, 2)) shadowEngine->SetShadowType(VOLUMEN);
+        if (shadowModel == 0) {
+            ImGui::DragFloat("Altura", &(shadowEngine->groundHeight), 0.05f, -10.0f, 10.0f);
+        } else if (shadowModel == 1) {
+            ImGui::DragFloat("Bias Fijo", &(shadowEngine->bias), 0.0001f, 0.0f, 0.01f);
+            ImGui::Text("PCF");
+            ImGui::RadioButton("Off", &(shadowEngine->pcfSize), 0); ImGui::SameLine();
+            ImGui::RadioButton("3X3", &(shadowEngine->pcfSize), 3); ImGui::SameLine();
+            ImGui::RadioButton("5X5", &(shadowEngine->pcfSize), 5); ImGui::SameLine();
+            ImGui::RadioButton("7X7", &(shadowEngine->pcfSize), 7); ImGui::SameLine();
+            ImGui::RadioButton("PCSS", &(shadowEngine->pcfSize), -1);
+            if (shadowEngine->pcfSize == -1) {
+                ImGui::SliderFloat("Suavidad PCSS", &(shadowEngine->pcssSize), 10.0f, 300.0f);
+            }
+            //Modos de Visualizacion
+            ImGui::Separator();
+            ImGui::Text("Modo de Visualizacion");
+            ImGui::RadioButton("PBR + Sombras", &shadowViewMode, 0);
+            ImGui::RadioButton("Mostrar Solo Sombras", &shadowViewMode, 1);
+            ImGui::RadioButton("Visualizar FBO", &shadowViewMode, 2);
+            actualShader->SetInt("uShadowViewMode", shadowViewMode);
+        }
+    } else {
+        ImGui::SliderInt("Rebotes Maximos", &(actualScene->rtMaxBounces), 1, 12);
     }
+    
     if (ImGui::CollapsingHeader("Gestor de Luces")) {
         if (ImGui::Button("Agregar Luz") && actualScene->lights.size() < 8) {
             actualScene->lights.push_back(std::make_shared<Light>());
@@ -274,9 +314,9 @@ void MainEngine::DrawUI() {
                 ImGui::Checkbox("Mostrar Gizmo", &light->showGizmo);
                 ImGui::ColorEdit3("Color", glm::value_ptr(light->color));
                 ImGui::DragFloat("Intensidad", &light->intensity, 0.1f, 0.0f, 100.0f);
-
-                ImGui::DragFloat3("Posicion", glm::value_ptr(light->position), 0.1f);
-                
+                if (light->type != DIRECTIONAL) {
+                    ImGui::DragFloat3("Posicion", glm::value_ptr(light->position), 0.1f);
+                }
                 if (light->type == DIRECTIONAL|| light->type == SPOT) {
                     if (ImGui::DragFloat3("Direccion", glm::value_ptr(light->direction), 0.01f)) {
                         if (glm::length(light->direction) > 0.0001f) {
@@ -350,6 +390,22 @@ void MainEngine::DrawUI() {
     ImGui::SameLine();
     ImGui::Text("Camaras Guardadas: %d/8", (int)actualScene->cameras.size());
 
+    int camType = static_cast<int>(actualCamera->type);
+    ImGui::Text("Motor de Renderizado:");
+    if (ImGui::RadioButton("Rasterizacion", &camType, 0)) {
+        actualCamera->type = static_cast<CameraType>(camType);
+        if (!actualScene->cameras.empty()) {
+            actualScene->cameras[selectedCameraIndex].type = actualCamera->type;
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Ray Tracing", &camType, 1)) {
+        actualCamera->type = static_cast<CameraType>(camType);
+        if (!actualScene->cameras.empty()) {
+            actualScene->cameras[selectedCameraIndex].type = actualCamera->type;
+        }
+    }
+
     if (!actualScene->cameras.empty()) {
         std::string combo_preview_value = "Camara " + std::to_string(selectedCameraIndex);
         if (ImGui::BeginCombo("Seleccionar Camara", combo_preview_value.c_str())) {
@@ -365,19 +421,6 @@ void MainEngine::DrawUI() {
                 if (is_selected) ImGui::SetItemDefaultFocus();
             }
             ImGui::EndCombo();
-        }
-        
-        Camera& activeListCam = actualScene->cameras[selectedCameraIndex];
-        int camType = static_cast<int>(activeListCam.type);
-        ImGui::Text("Motor de Renderizado:");
-        if (ImGui::RadioButton("Rasterizacion", &camType, 0)) {
-            activeListCam.type = static_cast<CameraType>(camType);
-            actualCamera->type = activeListCam.type;
-        }
-        ImGui::SameLine();
-        if (ImGui::RadioButton("Ray Tracing", &camType, 1)) {
-            activeListCam.type = static_cast<CameraType>(camType);
-            actualCamera->type = activeListCam.type;
         }
 
         if (ImGui::Button("Eliminar Camara")) {
@@ -597,6 +640,13 @@ void MainEngine::Cleanup() {
     phongShader.reset();
     blinnPhongShader.reset();
     pbrShader.reset();
+    rtShader.reset();
+    lineShader.reset();
+    unlitShader.reset();
+    shadowShader.reset();
+    shadowEngine.reset();
+    actualCamera.reset();
+    previewNode.reset();
     if (previewFBO) glDeleteFramebuffers(1, &previewFBO);
     if (previewTexture) glDeleteTextures(1, &previewTexture);
     if (previewRBO) glDeleteRenderbuffers(1, &previewRBO);
@@ -609,6 +659,6 @@ void MainEngine::Cleanup() {
 
 int main() {
 	MainEngine engine(1280, 720);
-	engine.MainLoop();
+    engine.MainLoop();
 	return 0;
 }

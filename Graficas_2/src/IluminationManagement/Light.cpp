@@ -20,7 +20,7 @@ void Light::setupGizmo() {
         glDeleteBuffers(1, &vbo);
     }
     std::vector<GLfloat> vertices;
-    if (type == POINT || type == DIRECTIONAL) {
+    if (type == POINT) {
         // Esfera solida
         int stacks = 16;
         int sectors = 16;
@@ -54,11 +54,11 @@ void Light::setupGizmo() {
                 vertices.push_back(p4.x + offset.x); vertices.push_back(p4.y + offset.y); vertices.push_back(p4.z + offset.z);
             }
         }
-    } else if (type == SPOT) {
+    } else if (type == SPOT || type == DIRECTIONAL) {
         // Cono solido
         int segments = 16;
-        float height = 0.5f;
-        float angle = glm::acos(outerCutOff);
+        float height = (type == DIRECTIONAL) ? 1.0f : 0.5f;
+        float angle = glm::acos((type == DIRECTIONAL) ? 0.9f : outerCutOff);
         float radius = height * glm::tan(angle);
         glm::vec3 tip(0.0f, 0.0f, 0.0f);
         glm::vec3 baseCenter(0.0f, 0.0f, height);

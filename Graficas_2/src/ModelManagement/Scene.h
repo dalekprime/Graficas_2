@@ -17,11 +17,13 @@
 struct GPUVertex {
     glm::vec4 position;
     glm::vec4 normal;
+	glm::vec4 extra;
 };
 
 struct GPUMaterial {
     glm::vec4 albedo;
     glm::vec4 properties;
+	glm::vec4 texIndices;
 };
 
 struct GPUNode {
@@ -48,10 +50,12 @@ public:
 
     GLuint rtVertexSSBO = 0;
     GLuint rtIndexSSBO = 0;
-    GLuint rtMaterialSSBO = 0;
+	GLuint rtMaterialSSBO = 0;
     GLuint rtNodeSSBO = 0;
     GLuint fullscreenVAO = 0;
     GLuint fullscreenVBO = 0;
+	GLint rtMaxBounces = 3;
+
 private:
 	//Funciones Auxiliares par GLFT
 	std::shared_ptr<Texture> LoadTexture(int textureIndex, texType type,tinygltf::Model& model, std::vector<std::shared_ptr<Texture>>& Map, const std::string& basePath);

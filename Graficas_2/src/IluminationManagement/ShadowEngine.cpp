@@ -45,14 +45,52 @@ void ShadowEngine::RenderPlanar(Scene& scene, Camera& camera, ShaderProgram& act
 		planarShader->SetMatrix4("viewMatrix", camera.view * finalShadowMatrix);
 		scene.Draw(*planarShader, camera, true);
 	}
-
 	glDisable(GL_STENCIL_TEST);
 	glDisable(GL_BLEND);
 	glDepthMask(GL_TRUE);
 }
 
 void ShadowEngine::RenderMapping(Scene& scene, Camera& camera, ShaderProgram& actualShader) {
-
+	if (scene.lights.empty() || !scene.lights[0]) return;
+	//No haremos Luz Puntual
+	if (scene.lights[0]->type == POINT) return;
+	glm::mat4 lightSpaceMatrix = glm::mat4(1.0f);
+	if (scene.lights[0]->type == DIRECTIONAL) {
+		glm::vec3 lightDir = glm::normalize(scene.lights[0]->direction);
+		glm::vec3 lightPos = -lightDir * 20.0f;
+		//Matriz de Espacio de la Luz
+		glm::mat4 lightView = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		glm::mat4 lightProj = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 1.0f, 100.0f);
+		lightSpaceMatrix = lightProj * lightView;
+	} else if (scene.lights[0]->type == SPOT) {
+		glm::vec3 spotPos = scene.lights[0]->position;
+		glm::vec3 spotDir = glm::normalize(scene.lights[0]->direction);
+		glm::vec3 spotTarget = spotPos + spotDir;
+		float spotAngle = glm::acos(scene.lights[0]->outerCutOff);
+		glm::mat4 lightView = glm::lookAt(spotPos, spotTarget, glm::vec3(0, 1, 0));
+		glm::mat4 lightProj = glm::perspective(spotAngle * 2.0f, 1.0f, 0.1f, 50.0f);
+		lightSpaceMatrix = lightProj * lightView;
+	}
+	//Construir Shadow Map
+	glViewport(0, 0, shadowRes, shadowRes);
+	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+	glClear(GL_DEPTH_BUFFER_BIT);
+	depthShader->Activate();
+	depthShader->SetMatrix4("lightSpaceMatrix", lightSpaceMatrix);
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
+	scene.Draw(*depthShader, camera, true);
+	glCullFace(GL_BACK);
+	glDisable(GL_CULL_FACE);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, camera.width, camera.height);
+	actualShader.Activate();
+	actualShader.SetMatrix4("uLightSpaceMatrix", lightSpaceMatrix);
+	glBindTextureUnit(3, depthMap);
+	actualShader.SetInt("uShadowMap", 3);
+	actualShader.SetFloat("bias", bias);
+	actualShader.SetInt("pcfSize", pcfSize);
+	actualShader.SetFloat("pcssSize", pcssSize);
 }
 
 void ShadowEngine::RenderVolumen(Scene& scene, Camera& camera, ShaderProgram& actualShader) {

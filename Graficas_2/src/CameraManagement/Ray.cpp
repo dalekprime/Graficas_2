@@ -7,8 +7,8 @@ Ray::Ray(glm::vec3 origin, glm::vec3 direction, glm::vec3 color) :
     vao(nullptr), vbo(nullptr), hasHit(false), initialized(false) {}
 
 Ray::~Ray() {
-    if (vao) { vao->Delete(); delete vao; }
-    if (vbo) { vbo->Delete(); delete vbo; }
+    if (vao) { delete vao; vao = nullptr; }
+    if (vbo) { delete vbo; vbo = nullptr; }
 }
 
 void Ray::UpdateLine() {

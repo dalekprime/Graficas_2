@@ -40,13 +40,25 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
                     matMap[node->material.get()] = matID;
                     GPUMaterial m;
                     m.albedo = node->material->baseColorFactor;
+                    int albedoTexIdx = -1;
+                    if (node->material->albedoMap) {
+                        auto it = std::find(textureCache.begin(), textureCache.end(), node->material->albedoMap);
+                        if (it != textureCache.end()) albedoTexIdx = std::distance(textureCache.begin(), it);
+                    }
+                    m.texIndices = glm::vec4((float)albedoTexIdx, -1.0f, -1.0f, -1.0f);
+
                     if (glm::length(glm::vec3(m.albedo)) < 0.01f) {
                         m.albedo = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f); // Default grey for textures without base color
                     }
                     m.properties.x = node->material->roughnessFactor;
                     m.properties.y = node->material->metallicFactor;
                     m.properties.z = 1.5f; 
-                    m.properties.w = 0.0f; 
+                    if (node->material->baseColorFactor.a < 0.9f) {
+                        m.properties.w = 2.0f;
+                    }
+                    else {
+                        m.properties.w = 0.0f; 
+                    }
                     // No convertir texturas con alpha mask en cristal por defecto
                     // if (node->material->baseColorFactor.a < 0.9f) m.properties.w = 2.0f; 
                     gpuMaterials.push_back(m);
@@ -73,7 +85,8 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
                 gv.position = glm::vec4(worldPos.x, worldPos.y, worldPos.z, (float)matID);
                 glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(node->worldMatrix)));
                 glm::vec3 worldNormal = glm::normalize(normalMatrix * v.normal);
-                gv.normal = glm::vec4(worldNormal.x, worldNormal.y, worldNormal.z, 0.0f);
+                gv.normal = glm::vec4(worldNormal.x, worldNormal.y, worldNormal.z, v.texCoords.x);
+                gv.extra = glm::vec4(v.texCoords.y, 0.0f, 0.0f, 0.0f);
                 gpuVertices.push_back(gv);
             }
             int baseIndex = gpuIndices.size();
@@ -149,23 +162,29 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
     shader.SetMatrix4("uInvView", glm::inverse(camera.view));
     shader.SetMatrix4("uInvProj", glm::inverse(camera.projection));
     shader.SetVec2("uResolution", glm::vec2((float)camera.width, (float)camera.height));
-    shader.SetInt("uMaxBounces", 5);
+    shader.SetInt("uMaxBounces", rtMaxBounces);
     shader.SetVec3("uAmbientColor", glm::vec3(0.05f));
     shader.SetInt("uNumIndices", (int)gpuIndices.size());
     shader.SetInt("uNumNodes", (int)gpuNodes.size());
+    for (size_t i = 0; i < textureCache.size() && i < 16; i++) {
+        textureCache[i]->Bind(i + 5); 
+        shader.SetInt(("uTextures[" + std::to_string(i) + "]").c_str(), i + 5);
+    }
 
-    if (!lights.empty() && lights[0]) {
-        if (lights[0]->type == DIRECTIONAL) {
-            shader.SetVec3("uLightPos", -lights[0]->direction * 1000.0f);
-        } else {
-            shader.SetVec3("uLightPos", lights[0]->position);
+    shader.SetInt("uNumLights", (int)lights.size());
+    for (size_t i = 0; i < lights.size(); ++i) {
+        auto& light = lights[i];
+        std::string baseName = "uLights[" + std::to_string(i) + "].";
+        shader.SetInt((baseName + "type").c_str(), light->type);
+        if (light->type == DIRECTIONAL) {
+            shader.SetVec3((baseName + "position").c_str(), -glm::normalize(light->direction) * 1000.0f);
         }
-        shader.SetVec3("uLightColor", lights[0]->color);
-        shader.SetFloat("uLightIntensity", lights[0]->intensity);
-    } else {
-        shader.SetVec3("uLightPos", glm::vec3(0.0f, 10.0f, 0.0f));
-        shader.SetVec3("uLightColor", glm::vec3(1.0f));
-        shader.SetFloat("uLightIntensity", 1.0f);
+        else {
+            shader.SetVec3((baseName + "position").c_str(), light->position);
+        }
+        shader.SetVec3((baseName + "direction").c_str(), glm::normalize(light->direction));
+        shader.SetVec3((baseName + "color").c_str(), light->color);
+        shader.SetFloat((baseName + "intensity").c_str(), light->intensity);
     }
 
     if (fullscreenVAO == 0) {

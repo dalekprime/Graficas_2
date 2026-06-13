@@ -19,8 +19,6 @@ private:
 	GLuint depthMapFBO = 0;
 	GLuint depthMap = 0;
 	int shadowRes = 2048;
-	//Para llevar al espacio de Luz de Shadow Mapping
-	glm::mat4 lightSpaceMatrix = glm::mat4(1.0f);
 	//Shader para los modelos
 	std::unique_ptr<ShaderProgram> planarShader; 
 	std::unique_ptr<ShaderProgram> ambientShader;
@@ -34,6 +32,10 @@ private:
 public:
 	//Para manejar la altura de las sombras planares
 	float groundHeight = -1.0f;
+	//Bias y PCF para Shadow Mapping
+	float bias = 0.005;
+	int pcfSize = 3;
+	float pcssSize = 100.0f;
 	ShadowEngine(ShadowType type);
 	~ShadowEngine();
 	void RenderSceneWithShadows(Scene& actualScene, Camera& actualCamera, ShaderProgram& actualShader);

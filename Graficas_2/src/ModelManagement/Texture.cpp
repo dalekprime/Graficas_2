@@ -80,6 +80,10 @@ Texture::Texture(const unsigned char* data, int width, int height, int nrChannel
 	}
 }
 
+Texture::~Texture() {
+	Delete();
+}
+
 void Texture::Bind(GLuint unit) {
 	glBindTextureUnit(unit, ID);
 }
@@ -91,5 +95,6 @@ void Texture::Unbind(GLuint unit) {
 void Texture::Delete() {
 	if (ID != 0) {
 		glDeleteTextures(1, &ID);
+		ID = 0;
 	}
 }

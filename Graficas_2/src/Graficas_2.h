@@ -47,8 +47,9 @@ class MainEngine {
 	std::unique_ptr<Ray> pickingRay;
 	float deltaTime = 0.0f;
 	float lastFrame = 0.0f;
-	int lightModel = 0;
-	int shadowModel = 0;
+	int lightModel = 4; //0 Flat, 1 Lambert, 2 Phong, 3 Blinn, 4 PBR
+	int shadowModel = 1; //0 Planar, 1 Mapping, 2 Volumen
+	int shadowViewMode = 0;
 	//UI State
 	int rayPrecision = 1; // 0: Global, 1: Local, 2: Triangle
 	glm::vec3 rayColor = glm::vec3(1.0f, 0.0f, 0.0f);

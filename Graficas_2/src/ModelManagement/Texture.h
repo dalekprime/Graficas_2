@@ -26,6 +26,7 @@ public:
 	Texture(const char* image, texType texType, GLuint slot, GLenum format);
 	//Textura desde GLTF
 	Texture(const unsigned char* data, int width, int height, int nrChannels, texType texType);
+	~Texture();
 	void Bind(GLuint unit);
 	void Unbind(GLuint unit);
 	void Delete();

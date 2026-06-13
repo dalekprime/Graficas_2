@@ -5,6 +5,10 @@ VBO::VBO(const std::vector<Vertex>& vertices) {
 	glNamedBufferStorage(ID, vertices.size() * sizeof(Vertex), vertices.data(), GL_DYNAMIC_STORAGE_BIT);
 }
 
+VBO::~VBO() {
+	Delete();
+}
+
 void VBO::Bind() {
 	glBindBuffer(GL_ARRAY_BUFFER, ID);
 }
@@ -14,5 +18,8 @@ void VBO::Unbind() {
 }
 
 void VBO::Delete() {
-	glDeleteBuffers(1, &ID);
+	if (ID != 0) {
+		glDeleteBuffers(1, &ID);
+		ID = 0;
+	}
 }

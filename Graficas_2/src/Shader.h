@@ -22,6 +22,7 @@ class ShaderProgram {
 public:
     GLuint ID;
     ShaderProgram(const char* vertexFile, const char* fragmentFile);
+    ~ShaderProgram();
     void CheckCompileErrors(GLuint shader, ShaderType type);
     void Activate();
     void Deactivate();

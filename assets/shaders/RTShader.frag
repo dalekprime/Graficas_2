@@ -15,15 +15,36 @@ uniform vec3 uSceneMax;
 uniform vec3 uLightPos;
 uniform vec3 uLightColor;
 uniform float uLightIntensity;
+uniform int uLightType;
+
+
+struct Light {
+    int type;
+    vec3 position;
+    vec3 direction;
+    vec3 color;
+    float intensity;
+};
+
+#define MAX_LIGHTS 8
+uniform Light uLights[MAX_LIGHTS];
+uniform int uNumLights;
 
 struct GPUVertex {
-    vec4 position; 
+    vec4 position;
     vec4 normal;
+	vec4 extra;
 };
 
 struct GPUMaterial {
     vec4 albedo;
     vec4 properties;
+	vec4 texIndices;
+};
+
+struct GPUNode {
+    vec4 aabbMin;
+    vec4 aabbMax;
 };
 
 layout(std430, binding = 0) readonly buffer VertexBuffer {
@@ -38,11 +59,6 @@ layout(std430, binding = 2) readonly buffer MaterialBuffer {
     GPUMaterial materials[];
 };
 
-struct GPUNode {
-    vec4 aabbMin; // w = start index
-    vec4 aabbMax; // w = num indices
-};
-
 layout(std430, binding = 3) readonly buffer NodeBuffer {
     GPUNode sceneNodes[];
 };
@@ -55,6 +71,8 @@ struct Ray {
     vec3 direction;
 };
 
+uniform sampler2D uTextures[16];
+
 struct HitRecord {
     bool hit;
     float t;
@@ -63,12 +81,13 @@ struct HitRecord {
     vec3 geomNormal;
     bool frontFace;
     int materialID;
+    vec2 uv;
 };
 
 #define MAX_DIST 99999.0
 #define EPSILON 0.001
 
-// Generación de rayos primarios desde la cámara
+// Generación del Rayo Primario desde la Cámara
 Ray GenerateRay(vec2 fragCoord) {
     vec2 ndc = (fragCoord / uResolution) * 2.0 - 1.0;
     vec4 target = uInvProj * vec4(ndc.x, ndc.y, -1.0, 1.0);
@@ -77,7 +96,7 @@ Ray GenerateRay(vec2 fragCoord) {
     return Ray(viewPos, normalize(rayDir));
 }
 
-// Intersección con AABB para optimización (Hardware Culling)
+// Intersección Rápida con Cajas (Hardware AABB Culling)
 bool RayAABBIntersect(Ray ray, vec3 boxMin, vec3 boxMax) {
     vec3 dir = ray.direction;
     if (abs(dir.x) < 1e-6) dir.x = 1e-6 * sign(dir.x + 1e-8);
@@ -94,7 +113,7 @@ bool RayAABBIntersect(Ray ray, vec3 boxMin, vec3 boxMax) {
     return tFar >= tNear && tFar > 0.0;
 }
 
-// Algoritmo Möller-Trumbore
+// Intersección Exacta con Triángulos (Möller-Trumbore)
 bool RayTriangleIntersect(Ray ray, vec3 v0, vec3 v1, vec3 v2, out float t, out vec2 uv) {
     vec3 edge1 = v1 - v0;
     vec3 edge2 = v2 - v0;
@@ -113,7 +132,7 @@ bool RayTriangleIntersect(Ray ray, vec3 v0, vec3 v1, vec3 v2, out float t, out v
     return t > EPSILON;
 }
 
-// Recorre toda la escena (Optimizado con Deferred Math)
+// Búsqueda del Triángulo más cercano en la Escena
 HitRecord TraverseScene(Ray ray) {
     HitRecord closestHit;
     closestHit.hit = false;
@@ -128,10 +147,12 @@ HitRecord TraverseScene(Ray ray) {
 
     for (int n = 0; n < uNumNodes; n++) {
         GPUNode node = sceneNodes[n];
+        // Si el rayo no toca el Bounding Box del Nodo, saltamos todos sus triángulos
         if (!RayAABBIntersect(ray, node.aabbMin.xyz, node.aabbMax.xyz)) continue;
 
         int startIdx = int(node.aabbMin.w);
         int numIdx = int(node.aabbMax.w);
+        
         for (int i = startIdx; i < startIdx + numIdx; i += 3) {
             uint i0 = indices[i];
             uint i1 = indices[i+1];
@@ -145,7 +166,6 @@ HitRecord TraverseScene(Ray ray) {
                 if (t < closestHit.t) {
                     closestHit.hit = true;
                     closestHit.t = t;
-                    // Guardamos índices puros, sin calcular vectores
                     bestI0 = i0; bestI1 = i1; bestI2 = i2;
                     bestUV = uv;
                 }
@@ -153,11 +173,15 @@ HitRecord TraverseScene(Ray ray) {
         }
     }
 
-    // Resolución matemática aplazada al final (Ahorro masivo de ALU)
+    // Cálculos pesados (Normales interpoladas) solo para el triángulo ganador
     if (closestHit.hit) {
         vec3 v0 = vertices[bestI0].position.xyz;
         vec3 v1 = vertices[bestI1].position.xyz;
         vec3 v2 = vertices[bestI2].position.xyz;
+        vec2 uv0 = vec2(vertices[bestI0].normal.w, vertices[bestI0].extra.x);
+        vec2 uv1 = vec2(vertices[bestI1].normal.w, vertices[bestI1].extra.x);
+        vec2 uv2 = vec2(vertices[bestI2].normal.w, vertices[bestI2].extra.x);
+        closestHit.uv = uv0 * (1.0 - bestUV.x - bestUV.y) + uv1 * bestUV.x + uv2 * bestUV.y;
         
         closestHit.point = ray.origin + ray.direction * closestHit.t;
         
@@ -188,77 +212,67 @@ float GeometrySchlickGGX(float NdotV, float roughness) {
     return NdotV / (NdotV * (1.0 - k) + k);
 }
 
-//Iluminacion PBR Cook-Torrance
 vec3 ComputeLocalIllumination(Ray ray, HitRecord hit, GPUMaterial mat) {
-    vec3 lightDir = normalize(uLightPos - hit.point);
-    float distToLight = length(uLightPos - hit.point);
-    
     vec3 N = hit.normal;
     vec3 V = normalize(-ray.direction);
-    vec3 L = lightDir;
-    vec3 H = normalize(V + L);
-
     vec3 albedo = mat.albedo.rgb;
-    float roughness = max(mat.properties.x, 0.05); // Evitar division por cero
+    int albedoTexID = int(mat.texIndices.x);
+    if (albedoTexID >= 0 && albedoTexID < 16) {
+        albedo = texture(uTextures[albedoTexID], hit.uv).rgb;
+    }
+    float roughness = max(mat.properties.x, 0.05); 
     float metallic = mat.properties.y;
 
     vec3 ambient = albedo * uAmbientColor;
-    
-    float NdotL = max(dot(N, L), 0.0);
-    if (NdotL <= 0.0) return ambient; // Sombra pura si mira al lado opuesto
+    vec3 totalLo = vec3(0.0);
 
-    //Sombras (con offset robusto para evitar el "Shadow Terminator Artifact")
-    vec3 offsetOrigin = hit.point + hit.normal * 0.01 + lightDir * 0.01;
-    Ray shadowRay = Ray(offsetOrigin, L);
-    HitRecord shadowHit = TraverseScene(shadowRay);
-    if (shadowHit.hit && shadowHit.t < distToLight) {
-        return ambient; // Ocluido por otro objeto (sombra proyectada)
+    for(int i = 0; i < uNumLights; i++) {
+        vec3 lightDir = normalize(uLights[i].position - hit.point);
+        float distToLight = length(uLights[i].position - hit.point);
+        vec3 L = lightDir;
+        vec3 H = normalize(V + L);
+
+        float NdotL = max(dot(N, L), 0.0);
+        if (NdotL <= 0.0) continue;
+
+        // Sombras
+        vec3 offsetOrigin = hit.point + hit.normal * EPSILON + L * EPSILON;
+        Ray shadowRay = Ray(offsetOrigin, L);
+        HitRecord shadowHit = TraverseScene(shadowRay);
+        
+        if (shadowHit.hit && shadowHit.t < distToLight && int(materials[shadowHit.materialID].properties.w) != 2) {
+            continue; // Ocluido
+        }
+
+        vec3 F0 = mix(vec3(0.04), albedo, metallic);
+        float cosTheta = max(dot(H, V), 0.0);
+        vec3 F = F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+
+        float a = roughness * roughness;
+        float a2 = a * a;
+        float NdotH = max(dot(N, H), 0.0);
+        float denom = (NdotH * NdotH * (a2 - 1.0) + 1.0);
+        float NDF = a2 / max(PI * denom * denom, 0.0000001);
+
+        float NdotV = max(dot(N, V), 0.0);
+        float G = GeometrySchlickGGX(NdotV, roughness) * GeometrySchlickGGX(NdotL, roughness);
+
+        vec3 specular = (NDF * G * F) / max(4.0 * NdotV * NdotL, 0.0001);
+        vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+
+        totalLo += (kD * albedo / PI + specular) * uLights[i].color * uLights[i].intensity * NdotL;
     }
-    
-    // Fresnel
-    vec3 F0 = vec3(0.04); 
-    F0 = mix(F0, albedo, metallic);
-    float cosTheta = max(dot(H, V), 0.0);
-    vec3 F = F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
-
-    // Normal Distribution
-    float a = roughness * roughness;
-    float a2 = a * a;
-    float NdotH = max(dot(N, H), 0.0);
-    float NdotH2 = NdotH * NdotH;
-    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
-    float NDF = a2 / max(PI * denom * denom, 0.0000001);
-
-    // Geometry
-    float NdotV = max(dot(N, V), 0.0);
-    float G = GeometrySchlickGGX(NdotV, roughness) * GeometrySchlickGGX(NdotL, roughness);
-
-    vec3 specular = (NDF * G * F) / max(4.0 * NdotV * NdotL, 0.0001);
-
-    vec3 kS = F;
-    vec3 kD = vec3(1.0) - kS;
-    kD *= 1.0 - metallic;
-
-    vec3 Lo = (kD * albedo / PI + specular) * uLightColor * uLightIntensity * NdotL;
-
-    return ambient + Lo;
+    return ambient + totalLo;
 }
 
-// Fresnel
-float FresnelSchlick(float cosTheta, float ior) {
-    float r0 = (1.0 - ior) / (1.0 + ior);
-    r0 = r0 * r0;
-    return r0 + (1.0 - r0) * pow(1.0 - cosTheta, 5.0);
-}
-
-// Estructura para el Iterative Ray Tracing
+// --- ESTRUCTURA PARA EL MOTOR ITERATIVO (Sin recursividad) ---
 struct StackItem {
     Ray ray;
     vec3 throughput;
     int depth;
 };
 
-// Límite seguro para evitar Register Spilling en la VRAM
+// Profundidad máxima de rebotes para no colapsar la VRAM
 #define MAX_STACK 6
 
 void main() {
@@ -269,30 +283,56 @@ void main() {
     int stackPtr = 0;
     stack[stackPtr] = StackItem(primaryRay, vec3(1.0), 0);
     
+    // Bucle principal de Ray Tracing
     while (stackPtr >= 0 && stackPtr < MAX_STACK) {
         StackItem current = stack[stackPtr];
         stackPtr--;
         
         if (current.depth >= uMaxBounces) {
-            finalColor += current.throughput * uAmbientColor;
+            finalColor += current.throughput * vec3(0.0);
             continue;
         }
         
         HitRecord hit = TraverseScene(current.ray);
+        
+        // Si no golpeamos nada, pintamos el Cielo Procedural
         if (!hit.hit) {
-            finalColor += current.throughput * uAmbientColor;
+            vec3 unitDir = normalize(current.ray.direction);
+            float t_sky = 0.5 * (unitDir.y + 1.0);
+            // Degradado de Horizonte Blanco a Cenit Azul
+            vec3 skyColor = mix(vec3(1.0, 1.0, 1.0), vec3(0.5, 0.7, 1.0), t_sky); 
+            
+            finalColor += current.throughput * skyColor;
             continue;
         }
         
         GPUMaterial mat = materials[hit.materialID];
         int matType = int(mat.properties.w);
         
-        // Difuso
+        // TIPO 0: Material PBR Base (Soporta Metales)
         if (matType == 0) {
             vec3 localLight = ComputeLocalIllumination(current.ray, hit, mat);
-            finalColor += current.throughput * (localLight + mat.albedo.rgb * uAmbientColor);
+            float metallic = mat.properties.y;
+            
+            // Si tiene componente metálica, lanza un rayo de rebote especular
+            if (metallic > 0.01 && stackPtr < MAX_STACK - 1) {
+                vec3 V = normalize(-current.ray.direction);
+                vec3 F0 = mix(vec3(0.04), mat.albedo.rgb, metallic);
+                float cosTheta = max(dot(hit.normal, V), 0.0);
+                vec3 F = F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0); // Fresnel
+                
+                vec3 refDir = reflect(current.ray.direction, hit.normal);
+                Ray refRay = Ray(hit.point + hit.geomNormal * EPSILON, refDir);
+                
+                stackPtr++;
+                
+                finalColor += current.throughput * localLight * (vec3(1.0) - F);
+                stack[stackPtr] = StackItem(refRay, current.throughput * F, current.depth + 1);
+            } else {
+                finalColor += current.throughput * localLight;
+            }
         }
-        // Reflexión
+        // TIPO 1: Espejo Puro
         else if (matType == 1) { 
             vec3 refDir = reflect(current.ray.direction, hit.normal);
             Ray refRay = Ray(hit.point + hit.geomNormal * EPSILON, refDir);
@@ -301,7 +341,7 @@ void main() {
                 stack[stackPtr] = StackItem(refRay, current.throughput * mat.albedo.rgb, current.depth + 1);
             }
         }
-        // Refracción y Fresnel
+        // TIPO 2: Cristal (Refracción y Reflexión de Fresnel)
         else if (matType == 2) {
             float ior = mat.properties.z;
             float eta = hit.frontFace ? (1.0 / ior) : ior;
@@ -312,8 +352,9 @@ void main() {
             float R;
             float sinT2 = eta * eta * (1.0 - cosTheta * cosTheta);
             
+            // Reflexión Interna Total
             if (sinT2 > 1.0 || length(refrDir) == 0.0) {
-                R = 1.0; // Reflexión interna total
+                R = 1.0; 
             } else {
                 float cosX = (eta > 1.0) ? sqrt(1.0 - sinT2) : cosTheta;
                 float r0 = (1.0 - ior) / (1.0 + ior);
@@ -321,27 +362,21 @@ void main() {
                 R = r0 + (1.0 - r0) * pow(1.0 - cosX, 5.0);
             }
 
-            // Rayo Transmitido (Adentro)
-            if (R < 1.0) {
+            // Rayo Refractado (Atraviesa el objeto)
+            if (R < 1.0 && stackPtr < MAX_STACK - 1) {
                 vec3 d = normalize(refrDir);
-                // Despegar el rayo estrictamente hacia ADENTRO usando la normal geométrica fina
                 Ray refrRay = Ray(hit.point - hit.geomNormal * EPSILON, d);
-                if (stackPtr < MAX_STACK - 1) {
-                    stackPtr++;
-                    stack[stackPtr] = StackItem(refrRay, current.throughput * (1.0 - R) * mat.albedo.rgb, current.depth + 1);
-                }
+                stackPtr++;
+                stack[stackPtr] = StackItem(refrRay, current.throughput * (1.0 - R) * mat.albedo.rgb, current.depth + 1);
             }
             
-            // Rayo Reflejado (Afuera)
-            if (R > 0.0) {
+            // Rayo Reflejado (Superficie del cristal)
+            if (R > 0.0 && stackPtr < MAX_STACK - 1) {
                 vec3 refDir = reflect(current.ray.direction, hit.normal);
-                // Despegar el rayo estrictamente hacia AFUERA usando la normal geométrica fina
                 Ray refRay = Ray(hit.point + hit.geomNormal * EPSILON, refDir);
-                if (stackPtr < MAX_STACK - 1) {
-                    stackPtr++;
-                    stack[stackPtr] = StackItem(refRay, current.throughput * R, current.depth + 1);
-               }
-}
+                stackPtr++;
+                stack[stackPtr] = StackItem(refRay, current.throughput * R, current.depth + 1);
+            }
         }
     }
     

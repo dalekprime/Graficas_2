@@ -50,6 +50,10 @@ ShaderProgram::ShaderProgram(const char* vertexFile, const char* fragmentFile) {
 	glDeleteShader(fragmentShader);
 }
 
+ShaderProgram::~ShaderProgram() {
+	Delete();
+}
+
 void ShaderProgram::CheckCompileErrors(GLuint shader, ShaderType type) {
 	GLint status = GL_FALSE;
 	GLchar message[1024];
@@ -89,7 +93,10 @@ void ShaderProgram::Deactivate() {
 }
 
 void ShaderProgram::Delete() {
-	glDeleteProgram(ID);
+	if (ID != 0) {
+		glDeleteProgram(ID);
+		ID = 0;
+	}
 }
 
 //Uniformes usando DSA
