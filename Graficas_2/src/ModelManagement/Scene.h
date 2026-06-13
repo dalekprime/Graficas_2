@@ -55,6 +55,7 @@ public:
     GLuint fullscreenVAO = 0;
     GLuint fullscreenVBO = 0;
 	GLint rtMaxBounces = 3;
+	glm::vec3 rtAmbientColor = glm::vec3(0.05f);
 
 private:
 	//Funciones Auxiliares par GLFT

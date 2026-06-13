@@ -27,9 +27,7 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
     std::vector<GLuint> gpuIndices;
     std::vector<GPUMaterial> gpuMaterials;
     std::vector<GPUNode> gpuNodes;
-
     std::unordered_map<Material*, int> matMap;
-
     auto ProcessNodeForRT = [&](Node* node, auto& self) -> void {
         if (!node) return;
         if (node->mesh) {
@@ -48,7 +46,7 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
                     m.texIndices = glm::vec4((float)albedoTexIdx, -1.0f, -1.0f, -1.0f);
 
                     if (glm::length(glm::vec3(m.albedo)) < 0.01f) {
-                        m.albedo = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f); // Default grey for textures without base color
+                        m.albedo = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);
                     }
                     m.properties.x = node->material->roughnessFactor;
                     m.properties.y = node->material->metallicFactor;
@@ -59,8 +57,6 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
                     else {
                         m.properties.w = 0.0f; 
                     }
-                    // No convertir texturas con alpha mask en cristal por defecto
-                    // if (node->material->baseColorFactor.a < 0.9f) m.properties.w = 2.0f; 
                     gpuMaterials.push_back(m);
                 } else {
                     matID = matMap[node->material.get()];
@@ -77,7 +73,6 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
                     matID = matMap[nullptr];
                 }
             }
-
             int baseVertex = gpuVertices.size();
             for (const auto& v : node->mesh->vertices) {
                 GPUVertex gv;
@@ -94,8 +89,7 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
                 gpuIndices.push_back(baseVertex + idx);
             }
             int numIndices = gpuIndices.size() - baseIndex;
-            
-            // Calcular AABB local del nodo para optimizacion BVH
+            // Calcular AABB local
             glm::vec3 nMin(99999.0f);
             glm::vec3 nMax(-99999.0f);
             for (const auto& v : node->mesh->vertices) {
@@ -103,10 +97,8 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
                 nMin = glm::min(nMin, worldPos);
                 nMax = glm::max(nMax, worldPos);
             }
-            // Expandir un poco para precision
             nMin -= glm::vec3(0.01f);
             nMax += glm::vec3(0.01f);
-            
             GPUNode gn;
             gn.aabbMin = glm::vec4(nMin, (float)baseIndex);
             gn.aabbMax = glm::vec4(nMax, (float)numIndices);
@@ -116,45 +108,35 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
             self(child.get(), self);
         }
     };
-
     for (const auto& rootNode : rootNodes) {
         ProcessNodeForRT(rootNode.get(), ProcessNodeForRT);
     }
-
     if (gpuVertices.empty()) return; 
-
     if (rtVertexSSBO == 0) glGenBuffers(1, &rtVertexSSBO);
     if (rtIndexSSBO == 0) glGenBuffers(1, &rtIndexSSBO);
     if (rtMaterialSSBO == 0) glGenBuffers(1, &rtMaterialSSBO);
     if (rtNodeSSBO == 0) glGenBuffers(1, &rtNodeSSBO);
-
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, rtVertexSSBO);
     glBufferData(GL_SHADER_STORAGE_BUFFER, gpuVertices.size() * sizeof(GPUVertex), gpuVertices.data(), GL_STATIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, rtVertexSSBO);
-
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, rtIndexSSBO);
     glBufferData(GL_SHADER_STORAGE_BUFFER, gpuIndices.size() * sizeof(GLuint), gpuIndices.data(), GL_STATIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, rtIndexSSBO);
-
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, rtMaterialSSBO);
     glBufferData(GL_SHADER_STORAGE_BUFFER, gpuMaterials.size() * sizeof(GPUMaterial), gpuMaterials.data(), GL_STATIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, rtMaterialSSBO);
-
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, rtNodeSSBO);
     glBufferData(GL_SHADER_STORAGE_BUFFER, gpuNodes.size() * sizeof(GPUNode), gpuNodes.data(), GL_STATIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, rtNodeSSBO);
-
-    // Calcular AABB de la escena
+    //Calcular AABB de la escena
     glm::vec3 aabbMin(99999.0f);
     glm::vec3 aabbMax(-99999.0f);
     for (const auto& v : gpuVertices) {
         aabbMin = glm::min(aabbMin, glm::vec3(v.position));
         aabbMax = glm::max(aabbMax, glm::vec3(v.position));
     }
-    // Expandir un poco el AABB para evitar problemas de precision
     aabbMin -= glm::vec3(0.1f);
     aabbMax += glm::vec3(0.1f);
-
     shader.Activate();
     shader.SetVec3("uSceneMin", aabbMin);
     shader.SetVec3("uSceneMax", aabbMax);
@@ -163,14 +145,13 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
     shader.SetMatrix4("uInvProj", glm::inverse(camera.projection));
     shader.SetVec2("uResolution", glm::vec2((float)camera.width, (float)camera.height));
     shader.SetInt("uMaxBounces", rtMaxBounces);
-    shader.SetVec3("uAmbientColor", glm::vec3(0.05f));
     shader.SetInt("uNumIndices", (int)gpuIndices.size());
     shader.SetInt("uNumNodes", (int)gpuNodes.size());
+    shader.SetVec3("uAmbientColor", rtAmbientColor);
     for (size_t i = 0; i < textureCache.size() && i < 16; i++) {
         textureCache[i]->Bind(i + 5); 
         shader.SetInt(("uTextures[" + std::to_string(i) + "]").c_str(), i + 5);
     }
-
     shader.SetInt("uNumLights", (int)lights.size());
     for (size_t i = 0; i < lights.size(); ++i) {
         auto& light = lights[i];
@@ -185,8 +166,9 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
         shader.SetVec3((baseName + "direction").c_str(), glm::normalize(light->direction));
         shader.SetVec3((baseName + "color").c_str(), light->color);
         shader.SetFloat((baseName + "intensity").c_str(), light->intensity);
+        shader.SetFloat((baseName + "cutOff").c_str(), light->cutOff);
+        shader.SetFloat((baseName + "outerCutOff").c_str(), light->outerCutOff);
     }
-
     if (fullscreenVAO == 0) {
         float quadVertices[] = {
             -1.0f,  1.0f, 0.0f,
@@ -204,7 +186,6 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     }
-
     glBindVertexArray(fullscreenVAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
@@ -216,16 +197,13 @@ std::shared_ptr<Texture> Scene::LoadTexture(int textureIndex, texType type,
     if (Map[textureIndex] != nullptr) return Map[textureIndex];
     int imageIndex = model.textures[textureIndex].source;
     const tinygltf::Image& gltfImage = model.images[imageIndex];
-    
     std::shared_ptr<Texture> newTex;
-    // Si hay datos en memoria (empaquetado en el glb o decodificados por tinygltf), usamos los datos binarios
     if (!gltfImage.image.empty()) {
         // Cargar desde la memoria del archivo binario glb
         newTex = std::make_shared<Texture>(gltfImage.image.data(), gltfImage.width, gltfImage.height, gltfImage.component, type);
     }
-    // Si la imagen tiene un URI valido (no vacio y no es data en base64) y no estaba en memoria, lo cargamos desde disco
     else if (!gltfImage.uri.empty() && gltfImage.uri.find("data:") != 0) {
-        // Cargar fisicamente desde el disco
+        // Cargar desde el disco
         std::string fullPath = basePath + gltfImage.uri;
         std::cout << fullPath << std::endl;
         newTex = std::make_shared<Texture>(fullPath.c_str(), type, 0, GL_RGB);

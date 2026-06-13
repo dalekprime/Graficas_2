@@ -82,6 +82,7 @@ class MainEngine {
 		void Update();
 		void DrawUI();
 		void Cleanup();
+		static void FramebufferSizeCallback(GLFWwindow* window, int width, int height);
 };
 
 #endif

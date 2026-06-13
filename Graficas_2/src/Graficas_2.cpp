@@ -25,6 +25,8 @@ void MainEngine::SetupWindow() {
 	}
 	//Hacer el contexto de la ventana actual
 	glfwMakeContextCurrent(window);
+	glfwSetWindowUserPointer(window, this);
+	glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
 	//Cargar las funciones de OpenGL usando GLAD
 	if (!gladLoadGL(glfwGetProcAddress)) {
 		std::cerr << "Failed to initialize GLAD" << std::endl;
@@ -254,6 +256,8 @@ void MainEngine::DrawUI() {
     ImGui::NewFrame();
     //VENTANA PRINCIPAL
     ImGui::Begin("Controles Graficas 2");
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "FPS: %.1f", ImGui::GetIO().Framerate);
+    ImGui::Separator();
     ImGui::Text("Iluminacion y Materiales");
     
     if (actualCamera->type != CameraType::RAYTRACING) {
@@ -267,8 +271,9 @@ void MainEngine::DrawUI() {
         ImGui::Separator();
         ImGui::Text("Tipo de Sombras");
         if (ImGui::RadioButton("Planar", &shadowModel, 0)) shadowEngine->SetShadowType(PLANAR); ImGui::SameLine();
-        if (ImGui::RadioButton("Mapping", &shadowModel, 1)) shadowEngine->SetShadowType(MAPPING); ImGui::SameLine();
-        if (ImGui::RadioButton("Volumen", &shadowModel, 2)) shadowEngine->SetShadowType(VOLUMEN);
+        if (ImGui::RadioButton("Mapping", &shadowModel, 1)) shadowEngine->SetShadowType(MAPPING); 
+        //ImGui::SameLine();
+        //if (ImGui::RadioButton("Volumen", &shadowModel, 2)) shadowEngine->SetShadowType(VOLUMEN);
         if (shadowModel == 0) {
             ImGui::DragFloat("Altura", &(shadowEngine->groundHeight), 0.05f, -10.0f, 10.0f);
         } else if (shadowModel == 1) {
@@ -291,7 +296,8 @@ void MainEngine::DrawUI() {
             actualShader->SetInt("uShadowViewMode", shadowViewMode);
         }
     } else {
-        ImGui::SliderInt("Rebotes Maximos", &(actualScene->rtMaxBounces), 1, 12);
+        ImGui::SliderInt("Rebotes", &(actualScene->rtMaxBounces), 1, 12);
+        ImGui::ColorEdit3("Color de Ambiente", glm::value_ptr(actualScene->rtAmbientColor));
     }
     
     if (ImGui::CollapsingHeader("Gestor de Luces")) {
@@ -661,4 +667,23 @@ int main() {
 	MainEngine engine(1280, 720);
     engine.MainLoop();
 	return 0;
+}
+
+void MainEngine::FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
+    glViewport(0, 0, width, height);
+    MainEngine* engine = (MainEngine*)glfwGetWindowUserPointer(window);
+    if (engine) {
+        engine->width = width;
+        engine->height = height;
+        if (engine->actualCamera) {
+            engine->actualCamera->width = width;
+            engine->actualCamera->height = height;
+        }
+        if (engine->actualScene) {
+            for (auto& cam : engine->actualScene->cameras) {
+                cam.width = width;
+                cam.height = height;
+            }
+        }
+    }
 }

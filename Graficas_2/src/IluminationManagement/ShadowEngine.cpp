@@ -59,7 +59,11 @@ void ShadowEngine::RenderMapping(Scene& scene, Camera& camera, ShaderProgram& ac
 		glm::vec3 lightDir = glm::normalize(scene.lights[0]->direction);
 		glm::vec3 lightPos = -lightDir * 20.0f;
 		//Matriz de Espacio de la Luz
-		glm::mat4 lightView = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+		if (glm::abs(glm::dot(lightDir, up)) > 0.999f) {
+			up = glm::vec3(0.0f, 0.0f, 1.0f);
+		}
+		glm::mat4 lightView = glm::lookAt(lightPos, glm::vec3(0.0f), up);
 		glm::mat4 lightProj = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 1.0f, 100.0f);
 		lightSpaceMatrix = lightProj * lightView;
 	} else if (scene.lights[0]->type == SPOT) {
@@ -67,7 +71,11 @@ void ShadowEngine::RenderMapping(Scene& scene, Camera& camera, ShaderProgram& ac
 		glm::vec3 spotDir = glm::normalize(scene.lights[0]->direction);
 		glm::vec3 spotTarget = spotPos + spotDir;
 		float spotAngle = glm::acos(scene.lights[0]->outerCutOff);
-		glm::mat4 lightView = glm::lookAt(spotPos, spotTarget, glm::vec3(0, 1, 0));
+		glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+		if (glm::abs(glm::dot(spotDir, up)) > 0.999f) {
+			up = glm::vec3(0.0f, 0.0f, 1.0f);
+		}
+		glm::mat4 lightView = glm::lookAt(spotPos, spotTarget, up);
 		glm::mat4 lightProj = glm::perspective(spotAngle * 2.0f, 1.0f, 0.1f, 50.0f);
 		lightSpaceMatrix = lightProj * lightView;
 	}
