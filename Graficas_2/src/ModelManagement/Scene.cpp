@@ -8,23 +8,213 @@ void Scene::AddRootNode(std::unique_ptr<Node> node) {
 
 void Scene::UpdateScene() {
     for (auto& node : rootNodes) {
-        node->UpdateWorldMatrix();
+        if (node) {
+            node->UpdateWorldMatrix();
+        }
     }
 }
 
 void Scene::Draw(ShaderProgram& shader, Camera& camera, bool isShadowPass) {
     for (auto& node : rootNodes) {
-        node->Draw(shader, camera, isShadowPass);
+        if (node) {
+            node->Draw(shader, camera, isShadowPass);
+        }
     }
 }
 
+void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::vector<std::shared_ptr<Light>>& lights) {
+    std::vector<GPUVertex> gpuVertices;
+    std::vector<GLuint> gpuIndices;
+    std::vector<GPUMaterial> gpuMaterials;
+    std::vector<GPUNode> gpuNodes;
+
+    std::unordered_map<Material*, int> matMap;
+
+    auto ProcessNodeForRT = [&](Node* node, auto& self) -> void {
+        if (!node) return;
+        if (node->mesh) {
+            int matID = 0;
+            if (node->material) {
+                if (matMap.find(node->material.get()) == matMap.end()) {
+                    matID = gpuMaterials.size();
+                    matMap[node->material.get()] = matID;
+                    GPUMaterial m;
+                    m.albedo = node->material->baseColorFactor;
+                    if (glm::length(glm::vec3(m.albedo)) < 0.01f) {
+                        m.albedo = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f); // Default grey for textures without base color
+                    }
+                    m.properties.x = node->material->roughnessFactor;
+                    m.properties.y = node->material->metallicFactor;
+                    m.properties.z = 1.5f; 
+                    m.properties.w = 0.0f; 
+                    // No convertir texturas con alpha mask en cristal por defecto
+                    // if (node->material->baseColorFactor.a < 0.9f) m.properties.w = 2.0f; 
+                    gpuMaterials.push_back(m);
+                } else {
+                    matID = matMap[node->material.get()];
+                }
+            } else {
+                if (matMap.find(nullptr) == matMap.end()) {
+                    matID = gpuMaterials.size();
+                    matMap[nullptr] = matID;
+                    GPUMaterial m;
+                    m.albedo = glm::vec4(1.0f);
+                    m.properties = glm::vec4(1.0f, 0.0f, 1.5f, 0.0f);
+                    gpuMaterials.push_back(m);
+                } else {
+                    matID = matMap[nullptr];
+                }
+            }
+
+            int baseVertex = gpuVertices.size();
+            for (const auto& v : node->mesh->vertices) {
+                GPUVertex gv;
+                glm::vec4 worldPos = node->worldMatrix * glm::vec4(v.position, 1.0f);
+                gv.position = glm::vec4(worldPos.x, worldPos.y, worldPos.z, (float)matID);
+                glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(node->worldMatrix)));
+                glm::vec3 worldNormal = glm::normalize(normalMatrix * v.normal);
+                gv.normal = glm::vec4(worldNormal.x, worldNormal.y, worldNormal.z, 0.0f);
+                gpuVertices.push_back(gv);
+            }
+            int baseIndex = gpuIndices.size();
+            for (const auto& idx : node->mesh->indices) {
+                gpuIndices.push_back(baseVertex + idx);
+            }
+            int numIndices = gpuIndices.size() - baseIndex;
+            
+            // Calcular AABB local del nodo para optimizacion BVH
+            glm::vec3 nMin(99999.0f);
+            glm::vec3 nMax(-99999.0f);
+            for (const auto& v : node->mesh->vertices) {
+                glm::vec3 worldPos = glm::vec3(node->worldMatrix * glm::vec4(v.position, 1.0f));
+                nMin = glm::min(nMin, worldPos);
+                nMax = glm::max(nMax, worldPos);
+            }
+            // Expandir un poco para precision
+            nMin -= glm::vec3(0.01f);
+            nMax += glm::vec3(0.01f);
+            
+            GPUNode gn;
+            gn.aabbMin = glm::vec4(nMin, (float)baseIndex);
+            gn.aabbMax = glm::vec4(nMax, (float)numIndices);
+            gpuNodes.push_back(gn);
+        }
+        for (const auto& child : node->children) {
+            self(child.get(), self);
+        }
+    };
+
+    for (const auto& rootNode : rootNodes) {
+        ProcessNodeForRT(rootNode.get(), ProcessNodeForRT);
+    }
+
+    if (gpuVertices.empty()) return; 
+
+    if (rtVertexSSBO == 0) glGenBuffers(1, &rtVertexSSBO);
+    if (rtIndexSSBO == 0) glGenBuffers(1, &rtIndexSSBO);
+    if (rtMaterialSSBO == 0) glGenBuffers(1, &rtMaterialSSBO);
+    if (rtNodeSSBO == 0) glGenBuffers(1, &rtNodeSSBO);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, rtVertexSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, gpuVertices.size() * sizeof(GPUVertex), gpuVertices.data(), GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, rtVertexSSBO);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, rtIndexSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, gpuIndices.size() * sizeof(GLuint), gpuIndices.data(), GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, rtIndexSSBO);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, rtMaterialSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, gpuMaterials.size() * sizeof(GPUMaterial), gpuMaterials.data(), GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, rtMaterialSSBO);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, rtNodeSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, gpuNodes.size() * sizeof(GPUNode), gpuNodes.data(), GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, rtNodeSSBO);
+
+    // Calcular AABB de la escena
+    glm::vec3 aabbMin(99999.0f);
+    glm::vec3 aabbMax(-99999.0f);
+    for (const auto& v : gpuVertices) {
+        aabbMin = glm::min(aabbMin, glm::vec3(v.position));
+        aabbMax = glm::max(aabbMax, glm::vec3(v.position));
+    }
+    // Expandir un poco el AABB para evitar problemas de precision
+    aabbMin -= glm::vec3(0.1f);
+    aabbMax += glm::vec3(0.1f);
+
+    shader.Activate();
+    shader.SetVec3("uSceneMin", aabbMin);
+    shader.SetVec3("uSceneMax", aabbMax);
+    shader.SetVec3("viewPos", camera.position);
+    shader.SetMatrix4("uInvView", glm::inverse(camera.view));
+    shader.SetMatrix4("uInvProj", glm::inverse(camera.projection));
+    shader.SetVec2("uResolution", glm::vec2((float)camera.width, (float)camera.height));
+    shader.SetInt("uMaxBounces", 5);
+    shader.SetVec3("uAmbientColor", glm::vec3(0.05f));
+    shader.SetInt("uNumIndices", (int)gpuIndices.size());
+    shader.SetInt("uNumNodes", (int)gpuNodes.size());
+
+    if (!lights.empty() && lights[0]) {
+        if (lights[0]->type == DIRECTIONAL) {
+            shader.SetVec3("uLightPos", -lights[0]->direction * 1000.0f);
+        } else {
+            shader.SetVec3("uLightPos", lights[0]->position);
+        }
+        shader.SetVec3("uLightColor", lights[0]->color);
+        shader.SetFloat("uLightIntensity", lights[0]->intensity);
+    } else {
+        shader.SetVec3("uLightPos", glm::vec3(0.0f, 10.0f, 0.0f));
+        shader.SetVec3("uLightColor", glm::vec3(1.0f));
+        shader.SetFloat("uLightIntensity", 1.0f);
+    }
+
+    if (fullscreenVAO == 0) {
+        float quadVertices[] = {
+            -1.0f,  1.0f, 0.0f,
+            -1.0f, -1.0f, 0.0f,
+             1.0f, -1.0f, 0.0f,
+            -1.0f,  1.0f, 0.0f,
+             1.0f, -1.0f, 0.0f,
+             1.0f,  1.0f, 0.0f
+        };
+        glGenVertexArrays(1, &fullscreenVAO);
+        glGenBuffers(1, &fullscreenVBO);
+        glBindVertexArray(fullscreenVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, fullscreenVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    }
+
+    glBindVertexArray(fullscreenVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
+}
+
 std::shared_ptr<Texture> Scene::LoadTexture(int textureIndex, texType type, 
-                    tinygltf::Model& model, std::vector<std::shared_ptr<Texture>>& Map) {
+                    tinygltf::Model& model, std::vector<std::shared_ptr<Texture>>& Map, const std::string& basePath) {
     if (textureIndex < 0) return nullptr;
     if (Map[textureIndex] != nullptr) return Map[textureIndex];
     int imageIndex = model.textures[textureIndex].source;
     const tinygltf::Image& gltfImage = model.images[imageIndex];
-    auto newTex = std::make_shared<Texture>(gltfImage.image.data(), gltfImage.width, gltfImage.height, gltfImage.component,type);
+    
+    std::shared_ptr<Texture> newTex;
+    // Si hay datos en memoria (empaquetado en el glb o decodificados por tinygltf), usamos los datos binarios
+    if (!gltfImage.image.empty()) {
+        // Cargar desde la memoria del archivo binario glb
+        newTex = std::make_shared<Texture>(gltfImage.image.data(), gltfImage.width, gltfImage.height, gltfImage.component, type);
+    }
+    // Si la imagen tiene un URI valido (no vacio y no es data en base64) y no estaba en memoria, lo cargamos desde disco
+    else if (!gltfImage.uri.empty() && gltfImage.uri.find("data:") != 0) {
+        // Cargar fisicamente desde el disco
+        std::string fullPath = basePath + gltfImage.uri;
+        std::cout << fullPath << std::endl;
+        newTex = std::make_shared<Texture>(fullPath.c_str(), type, 0, GL_RGB);
+    } 
+    else {
+        return nullptr;
+    }
+    
     newTex->path = gltfImage.uri;
     Map[textureIndex] = newTex;
     textureCache.push_back(newTex);
@@ -108,6 +298,12 @@ void Scene::LoadFromGLTF(const std::string& filename) {
     if (!ret) {
         throw std::runtime_error("GLTF Load Error: " + err);
     }
+    //Extraer el basePath
+    std::string basePath = "";
+    size_t lastSlash = filename.find_last_of("/\\");
+    if (lastSlash != std::string::npos) {
+        basePath = filename.substr(0, lastSlash + 1);
+    }
     //Cargar de Texturas
     std::vector<std::shared_ptr<Texture>> loadedTexturesMap(model.textures.size(), nullptr);
     for (auto& gltfMat : model.materials) {
@@ -115,26 +311,34 @@ void Scene::LoadFromGLTF(const std::string& filename) {
         //PBR Global
         actualMaterial->roughnessFactor = gltfMat.pbrMetallicRoughness.roughnessFactor;
         actualMaterial->metallicFactor = gltfMat.pbrMetallicRoughness.metallicFactor;
+        if (gltfMat.pbrMetallicRoughness.baseColorFactor.size() == 4) {
+            actualMaterial->baseColorFactor = glm::vec4(
+                gltfMat.pbrMetallicRoughness.baseColorFactor[0],
+                gltfMat.pbrMetallicRoughness.baseColorFactor[1],
+                gltfMat.pbrMetallicRoughness.baseColorFactor[2],
+                gltfMat.pbrMetallicRoughness.baseColorFactor[3]
+            );
+        }
         //Albedo texture
         int albedoIdx = gltfMat.pbrMetallicRoughness.baseColorTexture.index;
         if (albedoIdx > -1) {
             // Se extrae del binario y se etiqueta
-            std::shared_ptr<Texture> albedoTex = LoadTexture(albedoIdx, ALBEDO, model, loadedTexturesMap);
-            actualMaterial->textures.push_back(albedoTex);
+            std::shared_ptr<Texture> albedoTex = LoadTexture(albedoIdx, ALBEDO, model, loadedTexturesMap, basePath);
+            actualMaterial->albedoMap = albedoTex;
         }
         //Normal texture
         int normalIdx = gltfMat.normalTexture.index;
         if (normalIdx > -1) {
             // Se extrae del binario y se etiqueta
-            std::shared_ptr<Texture> normalTex = LoadTexture(normalIdx, NORMAL, model, loadedTexturesMap);
-            actualMaterial->textures.push_back(normalTex);
+            std::shared_ptr<Texture> normalTex = LoadTexture(normalIdx, NORMAL, model, loadedTexturesMap, basePath);
+            actualMaterial->normalMap = normalTex;
         }
         //PBR texture
         int pbrIdx = gltfMat.pbrMetallicRoughness.metallicRoughnessTexture.index;
         if (pbrIdx > -1) {
             // Se extrae del binario y se etiqueta
-            std::shared_ptr<Texture> pbrTex = LoadTexture(pbrIdx, PBR, model, loadedTexturesMap);
-            actualMaterial->textures.push_back(pbrTex);
+            std::shared_ptr<Texture> pbrTex = LoadTexture(pbrIdx, PBR, model, loadedTexturesMap, basePath);
+            actualMaterial->pbrMap = pbrTex;
         }
         materialCache.push_back(actualMaterial);
     }
@@ -198,7 +402,9 @@ void Scene::LoadFromGLTF(const std::string& filename) {
                 }
             }
             //Tangentes y Bitangentes
+            bool hasTangents = false;
             if (GetAttributeData("TANGENT", dataPtr, stride, model, primitive)) {
+                hasTangents = true;
                 for (size_t i = 0; i < vertices.size(); i++) {
                     const float* ptr = reinterpret_cast<const float*>(dataPtr + i * stride);
                     vertices[i].tangent = glm::vec3(ptr[0], ptr[1], ptr[2]);
@@ -225,6 +431,38 @@ void Scene::LoadFromGLTF(const std::string& filename) {
                     for (size_t i = 0; i < indAccessor.count; i++) indices[i] = buf[i];
                 }
             }
+            //Cálculo manual de Tangentes si el archivo glTF no las incluye
+            if (!hasTangents && indices.size() > 0) {
+                for (size_t i = 0; i + 2 < indices.size(); i += 3) {
+                    Vertex& v0 = vertices[indices[i]];
+                    Vertex& v1 = vertices[indices[i+1]];
+                    Vertex& v2 = vertices[indices[i+2]];
+                    glm::vec3 edge1 = v1.position - v0.position;
+                    glm::vec3 edge2 = v2.position - v0.position;
+                    glm::vec2 deltaUV1 = v1.texCoords - v0.texCoords;
+                    glm::vec2 deltaUV2 = v2.texCoords - v0.texCoords;
+                    float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+                    if (std::isinf(f) || std::isnan(f)) f = 0.0f; // Evitar division por cero
+                    glm::vec3 tangent;
+                    tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+                    tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+                    tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+                    v0.tangent += tangent;
+                    v1.tangent += tangent;
+                    v2.tangent += tangent;
+                }
+                for (auto& v : vertices) {
+                    if (glm::length(v.tangent) > 0.0001f) {
+                        v.tangent = glm::normalize(v.tangent);
+                    } else {
+                        // Fallback si no hay UVs válidas para este vértice
+                        v.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
+                    }
+                    // Ortogonalizar usando Gram-Schmidt
+                    v.tangent = glm::normalize(v.tangent - v.normal * glm::dot(v.normal, v.tangent));
+                    v.biTangent = glm::cross(v.normal, v.tangent);
+                }
+            }
             auto actualMesh = std::make_shared<Mesh>(vertices, indices);
             primitiveList.push_back(actualMesh);
         }
@@ -248,6 +486,9 @@ void Scene::LoadFromGLTF(const std::string& filename) {
                 newCam.fov = glm::degrees(gltfCam.perspective.yfov);
                 newCam.znear = gltfCam.perspective.znear;
                 newCam.zfar = gltfCam.perspective.zfar > 0.0f ? gltfCam.perspective.zfar : 100.0f;
+            }
+            if (gltfCam.extras.IsObject() && gltfCam.extras.Has("cameraType")) {
+                newCam.type = static_cast<CameraType>(gltfCam.extras.Get("cameraType").Get<int>());
             }
             //Función lambda para buscar el nodo dueño de esta cámara
             std::function<Node* (Node*, const std::string&)> FindNode = [&](Node* n, const std::string& name) -> Node* {
@@ -277,7 +518,7 @@ void Scene::LoadFromGLTF(const std::string& filename) {
     std::cout << "Escena cargada: " << filename << std::endl;
 };
 
-void Scene::SaveToGLTF(const std::string& filename) {
+void Scene::SaveToGLTF(const std::string& filename, Camera* currentCamera) {
     tinygltf::Model model;
     //Configurar metadatos
     model.asset.version = "2.0";
@@ -302,6 +543,11 @@ void Scene::SaveToGLTF(const std::string& filename) {
         gltfCam.perspective.znear = cameras[i].znear;
         gltfCam.perspective.zfar = cameras[i].zfar;
         gltfCam.perspective.aspectRatio = (float)cameras[i].width / (float)cameras[i].height;
+        
+        tinygltf::Value::Object extras;
+        extras["cameraType"] = tinygltf::Value(static_cast<int>(cameras[i].type));
+        gltfCam.extras = tinygltf::Value(extras);
+        
         model.cameras.push_back(gltfCam);
         tinygltf::Node camNode;
         camNode.name = "CameraNode_" + std::to_string(i);
@@ -313,6 +559,37 @@ void Scene::SaveToGLTF(const std::string& filename) {
         model.nodes.push_back(camNode);
         gltfScene.nodes.push_back(static_cast<int>(model.nodes.size() - 1));
     }
+    
+    // Export Camera State si existe
+    if (currentCamera) {
+        tinygltf::Camera gltfCam;
+        gltfCam.type = "perspective";
+        gltfCam.perspective.yfov = glm::radians(currentCamera->fov);
+        gltfCam.perspective.znear = currentCamera->znear;
+        gltfCam.perspective.zfar = currentCamera->zfar;
+        
+        tinygltf::Value::Object extras;
+        extras["cameraType"] = tinygltf::Value(static_cast<int>(currentCamera->type));
+        gltfCam.extras = tinygltf::Value(extras);
+        
+        model.cameras.push_back(gltfCam);
+        
+        tinygltf::Node camNode;
+        camNode.camera = static_cast<int>(model.cameras.size() - 1);
+        camNode.name = "SavedCamera";
+        camNode.translation = { currentCamera->position.x, currentCamera->position.y, currentCamera->position.z };
+        
+        // Calcular Quaternion desde la Orientacion y el Up
+        glm::mat4 viewMatrix = glm::lookAt(currentCamera->position, currentCamera->position + currentCamera->orientation, currentCamera->up);
+        // La matriz view transforma de mundo a cámara. La rotación del nodo glTF es de cámara a mundo (inversa de view)
+        glm::mat4 camToWorld = glm::inverse(viewMatrix);
+        glm::quat q = glm::quat_cast(camToWorld);
+        camNode.rotation = { q.x, q.y, q.z, q.w };
+        
+        model.nodes.push_back(camNode);
+        gltfScene.nodes.push_back(static_cast<int>(model.nodes.size() - 1));
+    }
+    
     //Vincular la escena y el buffer principal al modelo
     model.scenes.push_back(gltfScene);
     model.defaultScene = 0;
@@ -357,17 +634,24 @@ int Scene::ExportMaterial(Material* material, tinygltf::Model& model, tinygltf::
     //Exportar factores PBR básicos
     gltfMat.pbrMetallicRoughness.metallicFactor = material->metallicFactor;
     gltfMat.pbrMetallicRoughness.roughnessFactor = material->roughnessFactor;
-    //Mapear el vector de texturas de nuestro material a los slots a glTF
-    for (size_t i = 0; i < material->textures.size(); i++) {
-        if (!material->textures[i]) continue;
-        int texIdx = ExportTexture(material->textures[i].get(), model, mainBuffer);
-        if (material->textures[i]->type == ALBEDO) {
-            gltfMat.pbrMetallicRoughness.baseColorTexture.index = texIdx;
-        } else if (material->textures[i]->type == NORMAL) {
-            gltfMat.normalTexture.index = texIdx;
-        } else if (material->textures[i]->type == PBR) {
-            gltfMat.pbrMetallicRoughness.metallicRoughnessTexture.index = texIdx;
-        }
+    gltfMat.pbrMetallicRoughness.baseColorFactor = {
+        material->baseColorFactor.r,
+        material->baseColorFactor.g,
+        material->baseColorFactor.b,
+        material->baseColorFactor.a
+    };
+    //Mapear las texturas de nuestro material a los slots a glTF
+    if (material->albedoMap) {
+        int texIdx = ExportTexture(material->albedoMap.get(), model, mainBuffer);
+        gltfMat.pbrMetallicRoughness.baseColorTexture.index = texIdx;
+    }
+    if (material->normalMap) {
+        int texIdx = ExportTexture(material->normalMap.get(), model, mainBuffer);
+        gltfMat.normalTexture.index = texIdx;
+    }
+    if (material->pbrMap) {
+        int texIdx = ExportTexture(material->pbrMap.get(), model, mainBuffer);
+        gltfMat.pbrMetallicRoughness.metallicRoughnessTexture.index = texIdx;
     }
     model.materials.push_back(gltfMat);
     return static_cast<int>(model.materials.size() - 1);
@@ -376,52 +660,46 @@ int Scene::ExportMaterial(Material* material, tinygltf::Model& model, tinygltf::
 int Scene::ExportTexture(Texture* texture, tinygltf::Model& model, tinygltf::Buffer& mainBuffer) {
     tinygltf::Texture gltfTex;
     tinygltf::Image gltfImg;
-    //Si la textura tiene una ruta válida en el disco
-    if (!texture->path.empty()) {
-        gltfImg.name = "Textura_Enlazada";
-        gltfImg.uri = texture->path;
+    gltfImg.name = "Textura_Exportada_" + std::to_string(texture->ID);
+    // Preguntar a la GPU las dimensiones reales de esta textura
+    GLint width = 0, height = 0;
+    glGetTextureLevelParameteriv(texture->ID, 0, GL_TEXTURE_WIDTH, &width);
+    glGetTextureLevelParameteriv(texture->ID, 0, GL_TEXTURE_HEIGHT, &height);
+    if (width > 0 && height > 0) {
+        //Reservar memoria para recibir los píxeles
+        std::vector<unsigned char> rawPixels(width * height * 4);
+        //Descarga Textura
+        glGetTextureImage(texture->ID, 0, GL_RGBA, GL_UNSIGNED_BYTE, static_cast<GLsizei>(rawPixels.size()), rawPixels.data());
+        //Contexto de STB para escribir
+        auto stbiBufferCallback = [](void* context, void* data, int size) {
+            auto* vec = static_cast<std::vector<unsigned char>*>(context);
+            const auto* bytes = static_cast<const unsigned char*>(data);
+            vec->insert(vec->end(), bytes, bytes + size);
+        };
+        std::vector<unsigned char> compressedPngBytes;
+        //Comprimir los píxeles a binario PNG
+        stbi_write_png_to_func(stbiBufferCallback, &compressedPngBytes, width, height, 4, rawPixels.data(), width * 4);
+        //Empaquetar el PNG binario
+        size_t imgOffset = mainBuffer.data.size();
+        size_t imgLength = compressedPngBytes.size();
+        mainBuffer.data.resize(imgOffset + imgLength);
+        std::memcpy(&mainBuffer.data[imgOffset], compressedPngBytes.data(), imgLength);
+        //Crear una vista de buffer para que el lector glTF sepa dónde está el archivo PNG
+        tinygltf::BufferView imgView;
+        imgView.buffer = 0;
+        imgView.byteOffset = imgOffset;
+        imgView.byteLength = imgLength;
+        int imgViewIdx = static_cast<int>(model.bufferViews.size());
+        model.bufferViews.push_back(imgView);
+        //Configurar la imagen glTF apuntando a esa vista de memoria
+        gltfImg.bufferView = imgViewIdx;
+        gltfImg.mimeType = "image/png";
+        gltfImg.width = width;
+        gltfImg.height = height;
+        gltfImg.component = 4;
     } else {
-        gltfImg.name = "Textura_Extraida_VRAM" + std::to_string(texture->ID);
-        // Preguntar a la GPU las dimensiones reales de esta textura
-        GLint width = 0, height = 0;
-        glGetTextureLevelParameteriv(texture->ID, 0, GL_TEXTURE_WIDTH, &width);
-        glGetTextureLevelParameteriv(texture->ID, 0, GL_TEXTURE_HEIGHT, &height);
-        if (width > 0 && height > 0) {
-            //Reservar memoria para recibir los píxeles
-            std::vector<unsigned char> rawPixels(width * height * 4);
-            //Descarga Textura
-            glGetTextureImage(texture->ID, 0, GL_RGBA, GL_UNSIGNED_BYTE, static_cast<GLsizei>(rawPixels.size()), rawPixels.data());
-            //Contexto de STB para escribir
-            auto stbiBufferCallback = [](void* context, void* data, int size) {
-                auto* vec = static_cast<std::vector<unsigned char>*>(context);
-                const auto* bytes = static_cast<const unsigned char*>(data);
-                vec->insert(vec->end(), bytes, bytes + size);
-            };
-            std::vector<unsigned char> compressedPngBytes;
-            //Comprimir los píxeles a binario PNG
-            stbi_write_png_to_func(stbiBufferCallback, &compressedPngBytes, width, height, 4, rawPixels.data(), width * 4);
-            //Empaquetar el PNG binario
-            size_t imgOffset = mainBuffer.data.size();
-            size_t imgLength = compressedPngBytes.size();
-            mainBuffer.data.resize(imgOffset + imgLength);
-            std::memcpy(&mainBuffer.data[imgOffset], compressedPngBytes.data(), imgLength);
-            //Crear una vista de buffer para que el lector glTF sepa dónde está el archivo PNG
-            tinygltf::BufferView imgView;
-            imgView.buffer = 0;
-            imgView.byteOffset = imgOffset;
-            imgView.byteLength = imgLength;
-            int imgViewIdx = static_cast<int>(model.bufferViews.size());
-            model.bufferViews.push_back(imgView);
-            //Configurar la imagen glTF apuntando a esa vista de memoria
-            gltfImg.bufferView = imgViewIdx;
-            gltfImg.mimeType = "image/png";
-            gltfImg.width = width;
-            gltfImg.height = height;
-            gltfImg.component = 4;
-        } else {
-            gltfImg.width = 1; gltfImg.height = 1; gltfImg.component = 4;
-            gltfImg.image = { 255, 255, 255, 255 };
-        }
+        gltfImg.width = 1; gltfImg.height = 1; gltfImg.component = 4;
+        gltfImg.image = { 255, 255, 255, 255 };
     }
     int imgIdx = static_cast<int>(model.images.size());
     model.images.push_back(gltfImg);
@@ -429,6 +707,14 @@ int Scene::ExportTexture(Texture* texture, tinygltf::Model& model, tinygltf::Buf
     model.textures.push_back(gltfTex);
     return static_cast<int>(model.textures.size() - 1);
 };
+
+void Scene::DrawLightGizmos(ShaderProgram& shaderProgram) {
+    for (auto& light : lights) {
+        if (light) {
+            light->DrawGizmo(shaderProgram);
+        }
+    }
+}
 
 int Scene::ExportMesh(Mesh* mesh, Material* material, tinygltf::Model& model, tinygltf::Buffer& mainBuffer) {
     tinygltf::Mesh gltfMesh;

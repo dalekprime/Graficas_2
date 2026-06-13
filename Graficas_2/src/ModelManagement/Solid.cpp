@@ -100,5 +100,54 @@ std::unique_ptr<Node> Solid::GenerateRevolution(const std::vector<glm::vec2>& pr
     auto node = std::make_unique<Node>(nodeName);
     node->mesh = std::make_shared<Mesh>(vertices, indices);
     node->material = std::make_shared<Material>();
+    node->UpdateWorldAABB();
+    return node;
+}
+
+std::unique_ptr<Node> Solid::GeneratePlane(float size) {
+    std::vector<Vertex> vertices;
+    std::vector<GLuint> indices;
+
+    Vertex v1, v2, v3, v4;
+    v1.position = glm::vec3(-size, -1.0f, -size);
+    v1.normal = glm::vec3(0.0f, 1.0f, 0.0f);
+    v1.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
+    v1.biTangent = glm::vec3(0.0f, 0.0f, -1.0f);
+    v1.color = glm::vec3(0.2f, 0.2f, 0.2f);
+    v1.texCoords = glm::vec2(0.0f, size);
+
+    v2.position = glm::vec3(-size, -1.0f, size);
+    v2.normal = glm::vec3(0.0f, 1.0f, 0.0f);
+    v2.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
+    v2.biTangent = glm::vec3(0.0f, 0.0f, -1.0f);
+    v2.color = glm::vec3(0.2f, 0.2f, 0.2f);
+    v2.texCoords = glm::vec2(0.0f, 0.0f);
+
+    v3.position = glm::vec3(size, -1.0f, size);
+    v3.normal = glm::vec3(0.0f, 1.0f, 0.0f);
+    v3.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
+    v3.biTangent = glm::vec3(0.0f, 0.0f, -1.0f);
+    v3.color = glm::vec3(0.2f, 0.2f, 0.2f);
+    v3.texCoords = glm::vec2(size, 0.0f);
+
+    v4.position = glm::vec3(size, -1.0f, -size);
+    v4.normal = glm::vec3(0.0f, 1.0f, 0.0f);
+    v4.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
+    v4.biTangent = glm::vec3(0.0f, 0.0f, -1.0f);
+    v4.color = glm::vec3(0.2f, 0.2f, 0.2f);
+    v4.texCoords = glm::vec2(size, size);
+
+    vertices.push_back(v1);
+    vertices.push_back(v2);
+    vertices.push_back(v3);
+    vertices.push_back(v4);
+
+    indices = { 0, 1, 2, 0, 2, 3 };
+
+    auto node = std::make_unique<Node>("Plano_Suelo");
+    node->mesh = std::make_shared<Mesh>(vertices, indices);
+    node->material = std::make_shared<Material>();
+    node->castShadows = false;
+    node->UpdateWorldAABB();
     return node;
 }

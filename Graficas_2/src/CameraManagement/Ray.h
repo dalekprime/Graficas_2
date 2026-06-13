@@ -39,6 +39,9 @@ public:
     RayPrecision precision = RayPrecision::LOCAL;
     Ray(glm::vec3 origin, glm::vec3 direction, glm::vec3 color);
     ~Ray();
+    // Prevenir copias superficiales (Rule of Three)
+    Ray(const Ray&) = delete;
+    Ray& operator=(const Ray&) = delete;
     void Draw(ShaderProgram& shader, Camera& camera);
     void UpdateLine();
 };

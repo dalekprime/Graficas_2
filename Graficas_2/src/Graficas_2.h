@@ -25,6 +25,7 @@
 #include "ModelManagement/Scene.h"
 #include "ModelManagement/Solid.h"
 #include "CameraManagement/Ray.h"
+#include "IluminationManagement/ShadowEngine.h"
 
 //Clase principal del motor gráfico
 class MainEngine {
@@ -35,15 +36,19 @@ class MainEngine {
 	std::unique_ptr<ShaderProgram> phongShader;
 	std::unique_ptr<ShaderProgram> blinnPhongShader;
 	std::unique_ptr<ShaderProgram> pbrShader;
+	std::unique_ptr<ShaderProgram> rtShader;
 	std::unique_ptr<ShaderProgram> lineShader;
+	std::unique_ptr<ShaderProgram> unlitShader;
+	std::unique_ptr<ShaderProgram> shadowShader;
 	ShaderProgram* actualShader;
+	std::unique_ptr<ShadowEngine> shadowEngine;
 	std::unique_ptr<Camera> actualCamera;
 	std::unique_ptr<Scene> actualScene;
 	std::unique_ptr<Ray> pickingRay;
 	float deltaTime = 0.0f;
 	float lastFrame = 0.0f;
 	int lightModel = 0;
-	glm::vec3 lightPos = glm::vec3(0.0f, 2.0f, 2.5f);
+	int shadowModel = 0;
 	//UI State
 	int rayPrecision = 1; // 0: Global, 1: Local, 2: Triangle
 	glm::vec3 rayColor = glm::vec3(1.0f, 0.0f, 0.0f);
@@ -51,6 +56,8 @@ class MainEngine {
 	//Solid
 	bool showRevolutionUI = false;
 	char sceneSavePath[256] = "assets/models/scene.glb";
+	char sceneLoadPath[256] = "assets/scenes/Camp.glb";
+	int selectedCameraIndex = 0;
 	char newTexturePath[256] = "assets/textures/newTex.png";
 	//Revolution UI State
 	std::vector<glm::vec2> controlPoints;

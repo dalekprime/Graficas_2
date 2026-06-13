@@ -1,5 +1,5 @@
-﻿# Add source to this project's executable.
-add_executable (Graficas_2 "src/Graficas_2.h"  "src/Graficas_2.cpp"
+# Add source to this project's executable.
+add_executable (Graficas_2 "src/Graficas_2.h" "src/Graficas_2.cpp"
                            "src/Shader.h" "src/Shader.cpp" 
                            "src/BuffersManagement/VBO.h" "src/BuffersManagement/VBO.cpp" 
                            "src/BuffersManagement/VAO.h" "src/BuffersManagement/VAO.cpp"  
@@ -10,14 +10,22 @@ add_executable (Graficas_2 "src/Graficas_2.h"  "src/Graficas_2.cpp"
                            "src/ModelManagement/Solid.h" "src/ModelManagement/Solid.cpp"
                            "src/CameraManagement/Camera.h" "src/CameraManagement/Camera.cpp" 
                            "src/CameraManagement/Ray.h" "src/CameraManagement/Ray.cpp"
+                           "src/IluminationManagement/Light.h" "src/IluminationManagement/Light.cpp"
+                           "src/IluminationManagement/ShadowEngine.h" "src/IluminationManagement/ShadowEngine.cpp"
                            "${CMAKE_SOURCE_DIR}/assets/shaders/standardShader.vert"
                            "${CMAKE_SOURCE_DIR}/assets/shaders/flatShader.frag"
                            "${CMAKE_SOURCE_DIR}/assets/shaders/lambertShader.frag"
                            "${CMAKE_SOURCE_DIR}/assets/shaders/phongShader.frag"
                            "${CMAKE_SOURCE_DIR}/assets/shaders/blinnPhongShader.frag"
                            "${CMAKE_SOURCE_DIR}/assets/shaders/pbrShader.frag"
-                           "${CMAKE_SOURCE_DIR}/assets/shaders/lineShader.frag"
+                           "${CMAKE_SOURCE_DIR}/assets/shaders/RTShader.vert"
                            "${CMAKE_SOURCE_DIR}/assets/shaders/RTShader.frag"
+                           "${CMAKE_SOURCE_DIR}/assets/shaders/gizmoShader.vert"
+                           "${CMAKE_SOURCE_DIR}/assets/shaders/gizmoShader.frag"
+                           "${CMAKE_SOURCE_DIR}/assets/shaders/planar.vert"
+                           "${CMAKE_SOURCE_DIR}/assets/shaders/planar.frag"
+                           "${CMAKE_SOURCE_DIR}/assets/shaders/depth.vert"
+                           "${CMAKE_SOURCE_DIR}/assets/shaders/depth.frag"
 )
 
 add_custom_command(

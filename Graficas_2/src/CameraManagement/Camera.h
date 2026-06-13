@@ -12,8 +12,14 @@
 #include <glm/gtx/vector_angle.hpp>
 #include "../shader.h"
 
+enum class CameraType {
+    RASTERIZATION,
+    RAYTRACING
+};
+
 class Camera {
 public:
+	CameraType type = CameraType::RASTERIZATION;
 	glm::vec3 position;
 	glm::vec3 orientation = glm::vec3(0.0f, 0.0f, -1.0f);
 	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);

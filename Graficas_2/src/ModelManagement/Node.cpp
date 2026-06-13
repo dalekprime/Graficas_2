@@ -3,26 +3,40 @@
 void Material::Bind(ShaderProgram& shader) {
 	shader.SetFloat("uMetallic", metallicFactor);
 	shader.SetFloat("uRoughness", roughnessFactor);
+	shader.SetFloat("uAoFactor", aoFactor);
+	shader.SetVec4("uBaseColorFactor", baseColorFactor);
+	
 	int hasAlbedo = 0;
 	int hasNormal = 0;
-	for (int i = 0; i < textures.size(); i++) {
-		if (textures[i] != nullptr) {
-			glBindTextureUnit(i, textures[i]->ID);
-			switch (textures[i]->type) {
-			case ALBEDO: shader.SetInt("u_albedoMap", i); hasAlbedo = 1; break;
-			case NORMAL: shader.SetInt("u_normalMap", i); hasNormal = 1; break;
-			case ROUGHNESS: shader.SetInt("u_roughnessMap", i); break;
-			case METALLIC: shader.SetInt("u_metallicMap", i); break;
-			}
-		}
+	int hasPbr = 0;
+	
+	if (albedoMap != nullptr) {
+	    glBindTextureUnit(0, albedoMap->ID);
+	    shader.SetInt("u_albedoMap", 0);
+	    hasAlbedo = 1;
 	}
+	
+	if (normalMap != nullptr) {
+	    glBindTextureUnit(1, normalMap->ID);
+	    shader.SetInt("u_normalMap", 1);
+	    hasNormal = 1;
+	}
+	
+	if (pbrMap != nullptr) {
+	    glBindTextureUnit(2, pbrMap->ID);
+	    shader.SetInt("u_pbrMap", 2);
+	    hasPbr = 1;
+	}
+	
 	shader.SetInt("uHasAlbedoMap", hasAlbedo);
 	shader.SetInt("uHasNormalMap", hasNormal);
+	shader.SetInt("uHasPbrMap", hasPbr);
 }
 
 Mesh::Mesh(const std::vector<Vertex>& v, const std::vector<GLuint>& i):
 	vertices(v), indices(i) {
 	UpdateLocalAABB();
+	
 	vao = std::make_unique<VAO>();
 	vbo = std::make_unique<VBO>(vertices);
 	ebo = std::make_unique<EBO>(indices);
@@ -74,7 +88,8 @@ void Node::AddChild(std::unique_ptr<Node> child) {
 	children.push_back(std::move(child));
 }
 
-void Node::Draw(ShaderProgram& shader, Camera& camera, bool isShadowPass) {
+void Node::Draw(ShaderProgram& shader, Camera& camera, bool isShadowPass, bool parentSelected) {
+	bool effectivelySelected = isSelected || parentSelected;
 	if (!isVisible) return;
 	if (isShadowPass && !castShadows) return;
 	//Si este nodo en particular tiene geometría, se dibujara
@@ -85,16 +100,19 @@ void Node::Draw(ShaderProgram& shader, Camera& camera, bool isShadowPass) {
 		if (!isShadowPass && material) {
 			material->Bind(shader);
 			// Uniforme opcional para pintar de otro color si está seleccionado
-			shader.SetInt("isSelected", isSelected ? 1 : 0);
+			shader.SetInt("isSelected", effectivelySelected ? 1 : 0);
 			shader.SetInt("uSelectedTriangle", selectedTriangle);
+			shader.SetInt("uUVMappingMode", uvMappingMode);
 		}
+		//Enviar camara
+		shader.SetVec3("viewPos", camera.position);
 		//Dibujar
 		mesh->Draw();
 	}
 	//Dibujar Hijos
 	for (auto& child : children) {
 		if (child) {
-			child->Draw(shader, camera, isShadowPass);
+			child->Draw(shader, camera, isShadowPass, effectivelySelected);
 		}
 	}
 }
@@ -106,50 +124,61 @@ void Node::UpdateWorldMatrix() {
 	} else {
 		worldMatrix = localMatrix;
 	}
-	//Actualizar el BB
-	UpdateWorldAABB();
-	//Propagar a los hijos en cascada
+	//Propagar a los hijos en cascada primero
 	for (auto& child : children) {
 		if (child) {
 			child->UpdateWorldMatrix();
 		}
 	}
+	//Actualizar el BB después de los hijos para poder incluirlos
+	UpdateWorldAABB();
 }
 
 void Node::UpdateWorldAABB() {
-	// Si este nodo es solo un grupo vacío sin geometría, su caja es cero
-	if (!mesh) {
+	if (mesh) {
+		//Extraer los límites del espacio local de la malla
+		glm::vec3 lMin = mesh->aabbMinLocal;
+		glm::vec3 lMax = mesh->aabbMaxLocal;
+		//Definir los 8 vértices de la caja local
+		glm::vec3 corners[8] = {
+			glm::vec3(lMin.x, lMin.y, lMin.z),
+			glm::vec3(lMax.x, lMin.y, lMin.z),
+			glm::vec3(lMin.x, lMax.y, lMin.z),
+			glm::vec3(lMax.x, lMax.y, lMin.z),
+			glm::vec3(lMin.x, lMin.y, lMax.z),
+			glm::vec3(lMax.x, lMin.y, lMax.z),
+			glm::vec3(lMin.x, lMax.y, lMax.z),
+			glm::vec3(lMax.x, lMax.y, lMax.z)
+		};
+		//Transformar la primera esquina para inicializar los límites globales
+		glm::vec3 transformed = glm::vec3(worldMatrix * glm::vec4(corners[0], 1.0f));
+		aabbMinGlobal = transformed;
+		aabbMaxGlobal = transformed;
+		//Transformar los 7 vértices restantes y expandir la caja dinámicamente
+		for (int i = 1; i < 8; i++) {
+			transformed = glm::vec3(worldMatrix * glm::vec4(corners[i], 1.0f));
+			aabbMinGlobal.x = std::min(aabbMinGlobal.x, transformed.x);
+			aabbMinGlobal.y = std::min(aabbMinGlobal.y, transformed.y);
+			aabbMinGlobal.z = std::min(aabbMinGlobal.z, transformed.z);
+			aabbMaxGlobal.x = std::max(aabbMaxGlobal.x, transformed.x);
+			aabbMaxGlobal.y = std::max(aabbMaxGlobal.y, transformed.y);
+			aabbMaxGlobal.z = std::max(aabbMaxGlobal.z, transformed.z);
+		}
+	} else {
+		aabbMinGlobal = glm::vec3(std::numeric_limits<float>::max());
+		aabbMaxGlobal = glm::vec3(std::numeric_limits<float>::lowest());
+	}
+	//Expandir la caja para incluir a todos los hijos
+	for (auto& child : children) {
+		if (child && child->aabbMinGlobal.x <= child->aabbMaxGlobal.x) {
+			aabbMinGlobal = glm::min(aabbMinGlobal, child->aabbMinGlobal);
+			aabbMaxGlobal = glm::max(aabbMaxGlobal, child->aabbMaxGlobal);
+		}
+	}
+	//Si no hubo ni malla ni hijos válidos
+	if (aabbMinGlobal.x > aabbMaxGlobal.x) {
 		aabbMinGlobal = glm::vec3(0.0f);
 		aabbMaxGlobal = glm::vec3(0.0f);
-		return;
-	}
-	//Extraer los límites del espacio local de la malla
-	glm::vec3 lMin = mesh->aabbMinLocal;
-	glm::vec3 lMax = mesh->aabbMaxLocal;
-	//Definir los 8 vértices de la caja local
-	glm::vec3 corners[8] = {
-		glm::vec3(lMin.x, lMin.y, lMin.z),
-		glm::vec3(lMax.x, lMin.y, lMin.z),
-		glm::vec3(lMin.x, lMax.y, lMin.z),
-		glm::vec3(lMax.x, lMax.y, lMin.z),
-		glm::vec3(lMin.x, lMin.y, lMax.z),
-		glm::vec3(lMax.x, lMin.y, lMax.z),
-		glm::vec3(lMin.x, lMax.y, lMax.z),
-		glm::vec3(lMax.x, lMax.y, lMax.z)
-	};
-	//Transformar la primera esquina para inicializar los límites globales
-	glm::vec3 transformed = glm::vec3(worldMatrix * glm::vec4(corners[0], 1.0f));
-	aabbMinGlobal = transformed;
-	aabbMaxGlobal = transformed;
-	//Transformar los 7 vértices restantes y expandir la caja dinámicamente
-	for (int i = 1; i < 8; i++) {
-		transformed = glm::vec3(worldMatrix * glm::vec4(corners[i], 1.0f));
-		aabbMinGlobal.x = std::min(aabbMinGlobal.x, transformed.x);
-		aabbMinGlobal.y = std::min(aabbMinGlobal.y, transformed.y);
-		aabbMinGlobal.z = std::min(aabbMinGlobal.z, transformed.z);
-		aabbMaxGlobal.x = std::max(aabbMaxGlobal.x, transformed.x);
-		aabbMaxGlobal.y = std::max(aabbMaxGlobal.y, transformed.y);
-		aabbMaxGlobal.z = std::max(aabbMaxGlobal.z, transformed.z);
 	}
 }
 
@@ -172,7 +201,7 @@ bool Mesh::Raycast(const Ray& localRay, RayHit& hit) {
 	//Para recordar qué triángulo gana
 	glm::vec3 bestV0, bestV1, bestV2;
 	int bestTriangleIndex = -1;
-	for (size_t i = 0; i < indices.size(); i += 3) {
+	for (size_t i = 0; i + 2 < indices.size(); i += 3) {
 		glm::vec3 v0 = vertices[indices[i]].position;
 		glm::vec3 v1 = vertices[indices[i + 1]].position;
 		glm::vec3 v2 = vertices[indices[i + 2]].position;
@@ -226,9 +255,10 @@ bool Node::Raycast(const Ray& worldRay, RayHit& outHit) {
 	RayHit closestHit;
 	closestHit.distance = std::numeric_limits<float>::infinity();
 	glm::mat4 invMatrix = glm::inverse(worldMatrix);
-	Ray localRay = worldRay;
-	localRay.origin = glm::vec3(invMatrix * glm::vec4(worldRay.origin, 1.0f));
-	localRay.direction = glm::normalize(glm::vec3(invMatrix * glm::vec4(worldRay.direction, 0.0f)));
+	glm::vec3 localOrigin = glm::vec3(invMatrix * glm::vec4(worldRay.origin, 1.0f));
+	glm::vec3 localDir = glm::vec3(invMatrix * glm::vec4(worldRay.direction, 0.0f));
+	Ray localRay(localOrigin, localDir, worldRay.color);
+	localRay.precision = worldRay.precision;
 	if (mesh) {
 		RayHit meshHit;
 		if (mesh->Raycast(localRay, meshHit)) {

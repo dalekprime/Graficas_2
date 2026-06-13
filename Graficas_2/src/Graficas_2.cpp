@@ -1,13 +1,15 @@
 #include "Graficas_2.h"
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/matrix_decompose.hpp>
 
 MainEngine::MainEngine(int width, int height) : width(width), height(height) {
-	SetupWindow();
+    SetupWindow();
 }
 
 void MainEngine::SetupWindow() {
 	if (!glfwInit()) {
 		std::cerr << "Failed to initialize GLFW" << std::endl;
-		exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);
 	}
 	//Indica a GLFW que versión de OpenGL queremos usar
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -35,8 +37,10 @@ void MainEngine::SetupWindow() {
 	lambertShader = std::make_unique<ShaderProgram>("assets/shaders/standardShader.vert", "assets/shaders/lambertShader.frag");
 	phongShader = std::make_unique<ShaderProgram>("assets/shaders/standardShader.vert", "assets/shaders/phongShader.frag");
 	blinnPhongShader = std::make_unique<ShaderProgram>("assets/shaders/standardShader.vert", "assets/shaders/blinnPhongShader.frag");
-	lineShader = std::make_unique<ShaderProgram>("assets/shaders/standardShader.vert", "assets/shaders/lineShader.frag");
 	pbrShader = std::make_unique<ShaderProgram>("assets/shaders/standardShader.vert", "assets/shaders/pbrShader.frag");
+	rtShader = std::make_unique<ShaderProgram>("assets/shaders/RTShader.vert", "assets/shaders/RTShader.frag");
+	unlitShader = std::make_unique<ShaderProgram>("assets/shaders/gizmoShader.vert", "assets/shaders/gizmoShader.frag");
+
 	actualShader = flatShader.get();
 	pickingRay = std::make_unique<Ray>(glm::vec3(0.0f), glm::vec3(0.0f), rayColor);
 	//Habilitar el depth test para objetos 3D
@@ -47,14 +51,24 @@ void MainEngine::SetupWindow() {
 	//Crear la cámara
 	actualCamera = std::make_unique<Camera>(width, height, glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));	//Crear la escena y cargar el modelo glTF/GLB
 	actualScene = std::make_unique<Scene>();
+	// Crear luz por defecto
+	auto defaultLight = std::make_shared<Light>(DIRECTIONAL, glm::vec3(0.0f, 2.0f, 2.5f));
+	defaultLight->direction = glm::normalize(glm::vec3(-0.2f, -1.0f, -0.3f));
+	defaultLight->intensity = 1.0f;
+	actualScene->lights.push_back(defaultLight);
 	//Abrir Escena
 	try {
-		actualScene->LoadFromGLTF("assets/scenes/Camp.glb");
+        actualScene->LoadFromGLTF("assets/scenes/PBRSpheres.glb");
 	} catch (const std::exception& e) {
 		std::cout << "Aviso: " << e.what() << " (Se iniciará una escena vacía)" << std::endl;
 	};
+	
+	// Agregar plano de suelo dinamico
+	actualScene->AddRootNode(Solid::GeneratePlane(10.0f));
+    //Shadows
+    shadowEngine = std::make_unique<ShadowEngine>(PLANAR);
 	// Inicializar ImGui
-	IMGUI_CHECKVERSION();
+    IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	ImGui::StyleColorsDark();
@@ -93,7 +107,12 @@ void MainEngine::RenderPreview() {
 	Camera dummyCam(512, 512, glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	dummyCam.updateMatrix(45.0f, 0.1f, 100.0f);
 	dummyCam.matrix(*flatShader);
-    flatShader->SetVec3("uLightPos", glm::vec3(2.0f, 2.0f, 5.0f));
+    flatShader->SetInt("uNumLights", 1);
+    flatShader->SetInt("uLights[0].type", 0);
+    flatShader->SetVec3("uLights[0].position", glm::vec3(2.0f, 2.0f, 5.0f));
+    flatShader->SetVec3("uLights[0].direction", glm::vec3(0.0f, -1.0f, -1.0f));
+    flatShader->SetVec3("uLights[0].color", glm::vec3(1.0f));
+    flatShader->SetFloat("uLights[0].intensity", 1.0f);
 	previewNode->Draw(*flatShader, dummyCam, false);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	//Restaurar Viewport principal
@@ -131,7 +150,7 @@ void MainEngine::MainLoop() {
 				RayHit hit = actualScene->Raycast(*pickingRay);
 				if (selectedNode) selectedNode->isSelected = false;
 				if (hit.hasHit) {
-					selectedNode = hit.localNode;
+					selectedNode = (rayPrecision == 0) ? hit.rootNode : hit.localNode;
 					if (selectedNode) {
 						selectedNode->isSelected = true;
 						if (rayPrecision == 2) {
@@ -148,25 +167,54 @@ void MainEngine::MainLoop() {
 			wasClicked = false;
 		}
 		//Selección de Shaders
-		if (lightModel == 0) actualShader = flatShader.get();
-		else if (lightModel == 1) actualShader = lambertShader.get();
-		else if (lightModel == 2) actualShader = phongShader.get();
-		else if (lightModel == 3) actualShader = blinnPhongShader.get();
-		else if (lightModel == 4) actualShader = pbrShader.get();
-		actualShader->Activate();
-		//Inputs de la cámara
-		actualCamera->Inputs(window, deltaTime);
-		actualCamera->updateMatrix(45.0f, 0.1f, 100.0f);
-		actualCamera->matrix(*actualShader);
-		actualShader->SetVec3("uLightPos", lightPos);
-        //Seleccion
-        actualShader->SetVec3("uHighlightColor", rayColor);
-		//Actualizar matemáticas y dibujar
-		actualScene->UpdateScene();
-		actualScene->Draw(*actualShader, *actualCamera, false);
-		if (pickingRay->hasHit) {
-			pickingRay->Draw(*lineShader, *actualCamera);
+		if (actualCamera->type == CameraType::RAYTRACING) {
+			actualShader = rtShader.get();
+			actualShader->Activate();
+			//Inputs de la cámara
+			actualCamera->Inputs(window, deltaTime);
+			actualCamera->updateMatrix(45.0f, 0.1f, 100.0f);
+			actualCamera->matrix(*actualShader);
+			//Actualizar matemáticas y dibujar
+			actualScene->UpdateScene();
+			actualScene->RenderRaytraced(*actualShader, *actualCamera, actualScene->lights);
+		} else {
+			if (lightModel == 0) actualShader = flatShader.get();
+			else if (lightModel == 1) actualShader = lambertShader.get();
+			else if (lightModel == 2) actualShader = phongShader.get();
+			else if (lightModel == 3) actualShader = blinnPhongShader.get();
+			else if (lightModel == 4) actualShader = pbrShader.get();
+			actualShader->Activate();
+			//Inputs de la cámara
+			actualCamera->Inputs(window, deltaTime);
+			actualCamera->updateMatrix(45.0f, 0.1f, 100.0f);
+			actualCamera->matrix(*actualShader);
+			actualShader->SetInt("uNumLights", actualScene->lights.size());
+			for (size_t i = 0; i < actualScene->lights.size(); ++i) {
+				auto& light = actualScene->lights[i];
+				std::string baseName = "uLights[" + std::to_string(i) + "].";
+				actualShader->SetInt((baseName + "type").c_str(), light->type);
+				actualShader->SetVec3((baseName + "position").c_str(), light->position);
+				actualShader->SetVec3((baseName + "direction").c_str(), glm::normalize(light->direction));
+				actualShader->SetVec3((baseName + "color").c_str(), light->color);
+				actualShader->SetFloat((baseName + "intensity").c_str(), light->intensity);
+				actualShader->SetFloat((baseName + "cutOff").c_str(), light->cutOff);
+				actualShader->SetFloat((baseName + "outerCutOff").c_str(), light->outerCutOff);
+			}
+			//Seleccion
+			actualShader->SetVec3("uHighlightColor", rayColor);
+			//Actualizar matemáticas y dibujar
+			actualScene->UpdateScene();
+			actualScene->Draw(*actualShader, *actualCamera, false);
+			shadowEngine->RenderSceneWithShadows(*actualScene, *actualCamera, *actualShader);
 		}
+
+		if (pickingRay->hasHit) {
+			pickingRay->Draw(*unlitShader, *actualCamera);
+		}
+
+		actualCamera->matrix(*unlitShader);
+		actualScene->DrawLightGizmos(*unlitShader);
+
 		if (showRevolutionUI) {
 			RenderPreview();
 		}
@@ -179,8 +227,8 @@ void MainEngine::MainLoop() {
 void MainEngine::Update() {
 	//Configurar el color de fondo
 	glClearColor(0.07f, 0.13f, 0.17f, 1.0f);
-	//Limpiar el color y el depth buffer
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	//Limpiar el color, el depth buffer y el stencil buffer
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 }
 
 void MainEngine::DrawUI() {
@@ -196,7 +244,71 @@ void MainEngine::DrawUI() {
     ImGui::RadioButton("Phong", &lightModel, 2); ImGui::SameLine();
     ImGui::RadioButton("Blinn-Phong", &lightModel, 3); ImGui::SameLine();
     ImGui::RadioButton("PBR", &lightModel, 4);
-    ImGui::DragFloat3("Posicion Luz", glm::value_ptr(lightPos), 0.1f);
+
+    ImGui::Separator();
+    ImGui::Text("Tipo de Sombras");
+    if (ImGui::RadioButton("Planar", &shadowModel, 0)) shadowEngine->SetShadowType(PLANAR); ImGui::SameLine();
+    if (ImGui::RadioButton("Mapping", &shadowModel, 1)) shadowEngine->SetShadowType(MAPPING); ImGui::SameLine();
+    if (ImGui::RadioButton("Volumen", &shadowModel, 2)) shadowEngine->SetShadowType(VOLUMEN);
+    if (shadowModel == 0) {
+        ImGui::Text("Altura Planar");
+        ImGui::DragFloat("Altura", &(shadowEngine->groundHeight), 0.05f, -10.0f, 10.0f);
+    }
+    if (ImGui::CollapsingHeader("Gestor de Luces")) {
+        if (ImGui::Button("Agregar Luz") && actualScene->lights.size() < 8) {
+            actualScene->lights.push_back(std::make_shared<Light>());
+        }
+        ImGui::SameLine();
+        ImGui::Text("Luces Actuales: %d/8", (int)actualScene->lights.size());
+        //Listado de Luces
+        for (size_t i = 0; i < actualScene->lights.size(); ++i) {
+            auto& light = actualScene->lights[i];
+            ImGui::PushID(i);
+            if (ImGui::TreeNode(("Luz " + std::to_string(i)).c_str())) {
+                const char* lightTypes[] = { "Direccional", "Point", "Spot"};
+                int currentType = (int)light->type;
+                if (ImGui::Combo("Tipo", &currentType, lightTypes, IM_ARRAYSIZE(lightTypes))) {
+                    light->type = (LightType)currentType;
+                }
+
+                ImGui::Checkbox("Mostrar Gizmo", &light->showGizmo);
+                ImGui::ColorEdit3("Color", glm::value_ptr(light->color));
+                ImGui::DragFloat("Intensidad", &light->intensity, 0.1f, 0.0f, 100.0f);
+
+                ImGui::DragFloat3("Posicion", glm::value_ptr(light->position), 0.1f);
+                
+                if (light->type == DIRECTIONAL|| light->type == SPOT) {
+                    if (ImGui::DragFloat3("Direccion", glm::value_ptr(light->direction), 0.01f)) {
+                        if (glm::length(light->direction) > 0.0001f) {
+                            light->direction = glm::normalize(light->direction);
+                        } else {
+                            light->direction = glm::vec3(0.0f, -1.0f, 0.0f);
+                        }
+                    }
+                }
+
+                if (light->type == SPOT) {
+                    float innerAngle = glm::degrees(glm::acos(light->cutOff));
+                    float outerAngle = glm::degrees(glm::acos(light->outerCutOff));
+                    if (ImGui::DragFloat("Angulo Interno", &innerAngle, 1.0f, 0.0f, outerAngle)) {
+                        light->cutOff = glm::cos(glm::radians(innerAngle));
+                    }
+                    if (ImGui::DragFloat("Angulo Externo", &outerAngle, 1.0f, innerAngle, 90.0f)) {
+                        light->outerCutOff = glm::cos(glm::radians(outerAngle));
+                    }
+                }
+
+                if (ImGui::Button("Eliminar Luz")) {
+                    actualScene->lights.erase(actualScene->lights.begin() + i);
+                    ImGui::TreePop();
+                    ImGui::PopID();
+                    break;
+                }
+                ImGui::TreePop();
+            }
+            ImGui::PopID();
+        }
+    }
     ImGui::Separator();
     ImGui::Text("Rayo y Picking");
     ImGui::ColorEdit3("Color Rayo", glm::value_ptr(rayColor));
@@ -205,28 +317,123 @@ void MainEngine::DrawUI() {
     ImGui::Separator();
     ImGui::InputText("Ruta Guardado Escena", sceneSavePath, sizeof(sceneSavePath));
     if (ImGui::Button("Guardar Escena Completa")) {
-        actualScene->SaveToGLTF(sceneSavePath);
+        actualScene->SaveToGLTF(sceneSavePath, actualCamera.get());
+    }
+    ImGui::Separator();
+    ImGui::InputText("Ruta Cargar Escena", sceneLoadPath, sizeof(sceneLoadPath));
+    if (ImGui::Button("Cargar Nueva Escena")) {
+        selectedNode = nullptr;
+        pickingRay->hasHit = false;
+        actualScene = std::make_unique<Scene>();
+        try {
+            actualScene->LoadFromGLTF(sceneLoadPath);
+            actualScene->AddRootNode(Solid::GeneratePlane(10.0f));
+            if (!actualScene->cameras.empty()) {
+                *actualCamera = actualScene->cameras[0];
+                actualCamera->width = width;
+                actualCamera->height = height;
+                selectedCameraIndex = 0;
+            }
+        } catch (const std::exception& e) {
+            std::cout << "Error cargando escena: " << e.what() << std::endl;
+        }
+    }
+    ImGui::Separator();
+    ImGui::Text("Gestor de Camaras");
+    if (ImGui::Button("Agregar Camara Actual") && actualScene->cameras.size() < 8) {
+        Camera newCam = *actualCamera;
+        actualScene->cameras.push_back(newCam);
+        if (actualScene->cameras.size() == 1) {
+            selectedCameraIndex = 0;
+        }
+    }
+    ImGui::SameLine();
+    ImGui::Text("Camaras Guardadas: %d/8", (int)actualScene->cameras.size());
+
+    if (!actualScene->cameras.empty()) {
+        std::string combo_preview_value = "Camara " + std::to_string(selectedCameraIndex);
+        if (ImGui::BeginCombo("Seleccionar Camara", combo_preview_value.c_str())) {
+            for (int n = 0; n < actualScene->cameras.size(); n++) {
+                const bool is_selected = (selectedCameraIndex == n);
+                std::string camName = "Camara " + std::to_string(n);
+                if (ImGui::Selectable(camName.c_str(), is_selected)) {
+                    selectedCameraIndex = n;
+                    *actualCamera = actualScene->cameras[n];
+                    actualCamera->width = width;
+                    actualCamera->height = height;
+                }
+                if (is_selected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        
+        Camera& activeListCam = actualScene->cameras[selectedCameraIndex];
+        int camType = static_cast<int>(activeListCam.type);
+        ImGui::Text("Motor de Renderizado:");
+        if (ImGui::RadioButton("Rasterizacion", &camType, 0)) {
+            activeListCam.type = static_cast<CameraType>(camType);
+            actualCamera->type = activeListCam.type;
+        }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Ray Tracing", &camType, 1)) {
+            activeListCam.type = static_cast<CameraType>(camType);
+            actualCamera->type = activeListCam.type;
+        }
+
+        if (ImGui::Button("Eliminar Camara")) {
+            actualScene->cameras.erase(actualScene->cameras.begin() + selectedCameraIndex);
+            if (actualScene->cameras.empty()) {
+                selectedCameraIndex = 0;
+            } else {
+                if (selectedCameraIndex >= actualScene->cameras.size()) {
+                    selectedCameraIndex = actualScene->cameras.size() - 1;
+                }
+                *actualCamera = actualScene->cameras[selectedCameraIndex];
+                actualCamera->width = width;
+                actualCamera->height = height;
+            }
+        }
     }
     //INSPECTOR DE NODOS
     if (selectedNode) {
         ImGui::Separator();
         ImGui::Text("Propiedades del Nodo Seleccionado");
         ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Nombre: %s", selectedNode->name.c_str());
-        glm::vec3 pos(selectedNode->localMatrix[3]);
-        if (ImGui::DragFloat3("Posicion", glm::value_ptr(pos), 0.1f)) {
-            selectedNode->localMatrix[3][0] = pos.x;
-            selectedNode->localMatrix[3][1] = pos.y;
-            selectedNode->localMatrix[3][2] = pos.z;
+        glm::vec3 scale;
+        glm::quat rotation;
+        glm::vec3 translation;
+        glm::vec3 skew;
+        glm::vec4 perspective;
+        glm::decompose(selectedNode->localMatrix, scale, rotation, translation, skew, perspective);
+        
+        glm::vec3 euler = glm::degrees(glm::eulerAngles(rotation));
+        bool matrixChanged = false;
+
+        if (ImGui::DragFloat3("Posicion", glm::value_ptr(translation), 0.1f)) {
+            matrixChanged = true;
+        }
+        if (ImGui::DragFloat3("Rotacion", glm::value_ptr(euler), 1.0f)) {
+            matrixChanged = true;
+            rotation = glm::quat(glm::radians(euler));
+        }
+
+        if (matrixChanged) {
+            glm::mat4 m = glm::translate(glm::mat4(1.0f), translation) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
+            selectedNode->localMatrix = m;
         }
         if (selectedNode->material) {
             ImGui::SliderFloat("Metallic", &selectedNode->material->metallicFactor, 0.0f, 1.0f);
             ImGui::SliderFloat("Roughness", &selectedNode->material->roughnessFactor, 0.0f, 1.0f);
+            ImGui::SliderFloat("Ambient Occlusion", &selectedNode->material->aoFactor, 0.0f, 1.0f);
+            ImGui::ColorEdit4("Color Difuso (Base)", &selectedNode->material->baseColorFactor[0]);
             ImGui::Text("Texturas");
-            const char* texTypes[] = { "Base Color", "Normal Map" };
-            for (size_t i = 0; i < 2; ++i) {
-                bool hasTex = i < selectedNode->material->textures.size();
-                GLuint texID = hasTex && selectedNode->material->textures[i] ? selectedNode->material->textures[i]->ID : 0;
-                if (hasTex && texID != 0) {
+            const char* texTypes[] = { "Base Color", "Normal Map", "PBR Map" };
+            for (size_t i = 0; i < 3; ++i) {
+                std::shared_ptr<Texture>& currentMap = (i == 0) ? selectedNode->material->albedoMap : 
+                                                       (i == 1) ? selectedNode->material->normalMap : selectedNode->material->pbrMap;
+                
+                GLuint texID = currentMap ? currentMap->ID : 0;
+                if (texID != 0) {
                     ImGui::Text("%s: ID %u", texTypes[i], texID);
                 } else {
                     ImGui::Text("%s: Vacio", texTypes[i]);
@@ -236,25 +443,30 @@ void MainEngine::DrawUI() {
                     ImGui::OpenPopup(("SeleccionarTextura" + std::to_string(i)).c_str());
                 }
                 if (ImGui::BeginPopup(("SeleccionarTextura" + std::to_string(i)).c_str())) {
+                    if (ImGui::Selectable("Ninguna Textura")) {
+                        currentMap = nullptr;
+                    }
                     for (size_t j = 0; j < actualScene->textureCache.size(); ++j) {
                         if (ImGui::Selectable(("Textura " + std::to_string(j) + " (ID " + std::to_string(actualScene->textureCache[j]->ID) + ")").c_str())) {
-                            if (i >= selectedNode->material->textures.size()) {
-                                selectedNode->material->textures.resize(i + 1, nullptr);
-                            }
-                            selectedNode->material->textures[i] = actualScene->textureCache[j];
+                            currentMap = actualScene->textureCache[j];
                         }
                     }
                     ImGui::Separator();
                     ImGui::InputText("Ruta Textura", newTexturePath, sizeof(newTexturePath));
                     if (ImGui::Button("Cargar desde disco")) {
                         int imgWidth, imgHeight, imgChannels;
+                        stbi_set_flip_vertically_on_load(false);
                         unsigned char* bytes = stbi_load(newTexturePath, &imgWidth, &imgHeight, &imgChannels, 0);
                         if (bytes) {
                             // Cargar a VRAM y guardar en Caché
-                            texType texType = (i == 0) ? ALBEDO : NORMAL;
-                            auto newTex = std::make_shared<Texture>(bytes, imgWidth, imgHeight, imgChannels, texType);
+                            texType texTypeEnum = (i == 0) ? ALBEDO : (i == 1) ? NORMAL : PBR;
+                            auto newTex = std::make_shared<Texture>(bytes, imgWidth, imgHeight, imgChannels, texTypeEnum);
                             newTex->path = newTexturePath;
                             actualScene->textureCache.push_back(newTex);
+                            
+                            // Asignar al material del nodo seleccionado
+                            currentMap = newTex;
+                            
                             stbi_image_free(bytes);
                         } else {
                             std::cerr << "Error cargando textura: " << newTexturePath << std::endl;
@@ -263,6 +475,13 @@ void MainEngine::DrawUI() {
                     ImGui::EndPopup();
                 }
             }
+        }
+        
+        if (selectedNode->mesh) {
+            ImGui::Separator();
+            ImGui::Text("Mapeo UV Procedural (Solo Normal Map)");
+            const char* uvModes[] = { "Original (Nativo)", "Cilindrico", "Esferico" };
+            ImGui::Combo("Modo UV", &selectedNode->uvMappingMode, uvModes, IM_ARRAYSIZE(uvModes));
         }
     }
     ImGui::End();
@@ -370,6 +589,17 @@ void MainEngine::DrawUI() {
 }
 
 void MainEngine::Cleanup() {
+    // Liberar memoria que hace llamadas a OpenGL ANTES de destruir el contexto
+    pickingRay.reset();
+    actualScene.reset();
+    flatShader.reset();
+    lambertShader.reset();
+    phongShader.reset();
+    blinnPhongShader.reset();
+    pbrShader.reset();
+    if (previewFBO) glDeleteFramebuffers(1, &previewFBO);
+    if (previewTexture) glDeleteTextures(1, &previewTexture);
+    if (previewRBO) glDeleteRenderbuffers(1, &previewRBO);
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();

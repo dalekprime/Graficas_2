@@ -12,15 +12,18 @@
 #include "../CameraManagement/Camera.h"
 #include "../CameraManagement/Ray.h"
 #include "texture.h"
-#include "../CameraManagement/Ray.h"
 #include <limits>
 
 //Gestionara el Material y las Texturas
 class Material {
 public:
-	std::vector<std::shared_ptr<Texture>> textures;
+	std::shared_ptr<Texture> albedoMap;
+	std::shared_ptr<Texture> normalMap;
+	std::shared_ptr<Texture> pbrMap;
 	float metallicFactor = 0.0f;
 	float roughnessFactor = 1.0f;
+	float aoFactor = 1.0f;
+	glm::vec4 baseColorFactor = glm::vec4(1.0f);
 	void Bind(ShaderProgram& shader);
 };
 
@@ -34,6 +37,7 @@ public:
 	std::vector<GLuint> indices;
 	glm::vec3 aabbMinLocal = glm::vec3(0.0f);
 	glm::vec3 aabbMaxLocal = glm::vec3(0.0f);
+	
 	Mesh(const std::vector<Vertex>& v, const std::vector<GLuint>& i);
 	void Draw();
 	void UpdateLocalAABB();
@@ -61,9 +65,10 @@ public:
 	bool castShadows = true;
 	bool isSelected = false;
 	int selectedTriangle = -1;
+	int uvMappingMode = 0; // 0 = Original, 1 = Cilíndrico, 2 = Esférico
 	// Estado de Selección
 	void AddChild(std::unique_ptr<Node> child);
-	void Draw(ShaderProgram& shader, Camera& camera, bool isShadowPass = false);
+	void Draw(ShaderProgram& shader, Camera& camera, bool isShadowPass = false, bool parentSelected = false);
 	void UpdateWorldMatrix();
 	void UpdateWorldAABB();
 	bool Raycast(const Ray& worldRay, RayHit& outHit);

@@ -44,6 +44,7 @@ void Ray::Draw(ShaderProgram& shader, Camera& camera) {
     //Enviar la matriz del modelo local
     glm::mat4 model = glm::mat4(1.0f);
     glUniformMatrix4fv(glGetUniformLocation(shader.ID, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(model));
+    shader.SetInt("uUseOverride", 0);
     vao->Bind();
     glDrawArrays(GL_LINES, 0, 2);
     vao->Unbind();
