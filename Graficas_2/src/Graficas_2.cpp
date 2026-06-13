@@ -93,7 +93,7 @@ void MainEngine::RenderPreview() {
 	if (!previewNode) return;
 	glBindFramebuffer(GL_FRAMEBUFFER, previewFBO);
 	glViewport(0, 0, 512, 512);
-	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	//Configurar transformaciones de la matriz local del FBO
 	glm::mat4 model = glm::mat4(1.0f);

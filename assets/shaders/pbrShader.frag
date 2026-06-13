@@ -9,7 +9,7 @@ in vec3 biTangent;
 in mat3 TBN;
 
 struct Light {
-    int type; // 0 = Dir, 1 = Point, 2 = Spot
+    int type;
     vec3 position;
     vec3 direction;
     vec3 color;
@@ -92,7 +92,6 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir) {
         if(blockers == 0) return 0.0;
         float avgBlockerDepth = blockerDepth / float(blockers);
         float distanceToBlocker = max(currentDepth - avgBlockerDepth, 0.0);
-
         float penumbra = distanceToBlocker * pcssSize;
         float filterRadius = clamp(penumbra, 1.0, 20.0);
         int samples = 0;
