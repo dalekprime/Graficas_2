@@ -33,5 +33,5 @@ void main() {
     vec3 T = normalize(mat3(modelMatrix) * tangent);
     vec3 B = normalize(mat3(modelMatrix) * biTangent);
     vec3 N = normalize(mat3(modelMatrix) * normal);
-    TBN = mat3(T, B, N); 
+    TBN = mat3(T, B, N);
 }

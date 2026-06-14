@@ -18,7 +18,7 @@ std::vector<glm::vec2> Solid::EvaluateBezier(const std::vector<glm::vec2>& contr
     return curve;
 }
 
-std::unique_ptr<Node> Solid::GenerateRevolution(const std::vector<glm::vec2>& profile, 
+std::unique_ptr<Node> Solid::GenerateRevolution(const std::vector<glm::vec2>& profile,
                     int segments, int axis, glm::vec3 color, const std::string& nodeName) {
     if (profile.size() < 2 || segments < 3) return nullptr;
     std::vector<Vertex> vertices;
@@ -33,10 +33,10 @@ std::unique_ptr<Node> Solid::GenerateRevolution(const std::vector<glm::vec2>& pr
             Vertex v = {};
             v.color = color;
             v.texCoords = glm::vec2((float)s / segments, (float)p / (profile.size() - 1));
-            if (axis == 1) { 
+            if (axis == 1) {
                 // Eje Y
                 v.position = glm::vec3(profile[p].x * cosA, profile[p].y, profile[p].x * -sinA);
-            } else { 
+            } else {
                 // Eje X
                 v.position = glm::vec3(profile[p].x, profile[p].y * cosA, profile[p].y * -sinA);
             }

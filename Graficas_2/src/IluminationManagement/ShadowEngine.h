@@ -20,9 +20,9 @@ private:
 	GLuint depthMap = 0;
 	int shadowRes = 2048;
 	//Shader para los modelos
-	std::unique_ptr<ShaderProgram> planarShader; 
+	std::unique_ptr<ShaderProgram> planarShader;
 	std::unique_ptr<ShaderProgram> ambientShader;
-	std::unique_ptr<ShaderProgram> depthShader;  
+	std::unique_ptr<ShaderProgram> depthShader;
 	std::unique_ptr<ShaderProgram> volumeShader;
 	//Modelos
 	void InitShadowMapping();

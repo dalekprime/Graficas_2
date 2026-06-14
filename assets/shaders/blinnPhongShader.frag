@@ -57,9 +57,9 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir) {
         vec2 texel = 1.0 / textureSize(uShadowMap, 0);
         for(int x = -pcfLimit; x <= pcfLimit; x++) {
             for(int y = -pcfLimit; y <= pcfLimit; y++) {
-                float d = texture(uShadowMap, proj.xy + vec2(x, y) * texel).r; 
-                shadowPCF += currentDepth - bias > d ? 1.0 : 0.0;        
-            }    
+                float d = texture(uShadowMap, proj.xy + vec2(x, y) * texel).r;
+                shadowPCF += currentDepth - bias > d ? 1.0 : 0.0;
+            }
         }
         return shadowPCF / float(pcfSize * pcfSize);
     } else if(pcfSize == 0) {
@@ -90,10 +90,10 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir) {
         int samples = 0;
         for(int x = -2; x <= 2; x++) {
             for(int y = -2; y <= 2; y++) {
-                float d = texture(uShadowMap, proj.xy + vec2(x, y) * texel * filterRadius).r; 
+                float d = texture(uShadowMap, proj.xy + vec2(x, y) * texel * filterRadius).r;
                 shadowPCSS += (currentDepth - bias > d) ? 1.0 : 0.0;
                 samples++;
-            }    
+            }
         }
         return shadowPCSS / float(samples);
     }
@@ -108,7 +108,7 @@ void main() {
         float u = (atan(p.z, p.x) / (2.0 * PI)) + 0.5;
         float v;
         if (uUVMappingMode == 1) { // Cilindrico
-            v = p.y * 0.5 + 0.5; 
+            v = p.y * 0.5 + 0.5;
         } else { // Esferico
             v = (asin(p.y) / PI) + 0.5;
         }
@@ -124,7 +124,7 @@ void main() {
             vec3 Q2 = dFdy(FragPos);
             vec2 st1 = dFdx(normalTexCoords);
             vec2 st2 = dFdy(normalTexCoords);
-            
+
             vec3 T = normalize(Q1 * st2.t - Q2 * st1.t);
             vec3 B = -normalize(cross(N, T));
             TBN = mat3(T, B, N);
@@ -133,7 +133,7 @@ void main() {
             vec3 B = normalize(biTangent);
             TBN = mat3(T, B, N);
         }
-        
+
         vec3 tangentNormal = texture(u_normalMap, normalTexCoords).xyz * 2.0 - 1.0;
         norm = normalize(TBN * tangentNormal);
     }
@@ -152,7 +152,7 @@ void main() {
             float distance = length(uLights[i].position - FragPos);
             lightDir = normalize(uLights[i].position - FragPos);
             attenuation = 1.0 / max(distance * distance, 1.0);
-            
+
             if (uLights[i].type == 2) { // Spot
                 float theta = dot(lightDir, normalize(-uLights[i].direction));
                 float epsilon = max(uLights[i].cutOff - uLights[i].outerCutOff, 0.0001);
@@ -178,7 +178,7 @@ void main() {
         totalDiffuse += diff * radiance * (1.0 - currentShadow);
         totalSpecular += spec * radiance * 0.5 * (1.0 - currentShadow);
     }
-    
+
     vec3 albedo;
     if (uHasAlbedoMap == 1) {
         vec4 texColor = texture(u_albedoMap, TexCoords);
@@ -191,7 +191,7 @@ void main() {
     vec3 diffuse = totalDiffuse * albedo;
     vec3 specular = totalSpecular;
 
-    
+
     vec4 finalColor = vec4(ambient + diffuse + specular, 1.0);
 
     if (isSelected == 1) {

@@ -64,9 +64,9 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir) {
         vec2 texel = 1.0 / textureSize(uShadowMap, 0);
         for(int x = -pcfLimit; x <= pcfLimit; x++) {
             for(int y = -pcfLimit; y <= pcfLimit; y++) {
-                float d = texture(uShadowMap, proj.xy + vec2(x, y) * texel).r; 
-                shadowPCF += currentDepth - bias > d ? 1.0 : 0.0;        
-            }    
+                float d = texture(uShadowMap, proj.xy + vec2(x, y) * texel).r;
+                shadowPCF += currentDepth - bias > d ? 1.0 : 0.0;
+            }
         }
         return shadowPCF / float(pcfSize * pcfSize);
     } else if(pcfSize == 0) {
@@ -97,10 +97,10 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir) {
         int samples = 0;
         for(int x = -2; x <= 2; x++) {
             for(int y = -2; y <= 2; y++) {
-                float d = texture(uShadowMap, proj.xy + vec2(x, y) * texel * filterRadius).r; 
+                float d = texture(uShadowMap, proj.xy + vec2(x, y) * texel * filterRadius).r;
                 shadowPCSS += (currentDepth - bias > d) ? 1.0 : 0.0;
                 samples++;
-            }    
+            }
         }
         return shadowPCSS / float(samples);
     }
@@ -147,10 +147,10 @@ void main() {
         vec3 p = normalize(LocalPos);
         float u = (atan(p.z, p.x) / (2.0 * PI)) + 0.5;
         float v;
-        if (uUVMappingMode == 1) { 
+        if (uUVMappingMode == 1) {
             // Cilindrico
-            v = p.y * 0.5 + 0.5; 
-        } else { 
+            v = p.y * 0.5 + 0.5;
+        } else {
             // Esferico
             v = (asin(p.y) / PI) + 0.5;
         }
@@ -180,16 +180,16 @@ void main() {
     for(int i = 0; i < uNumLights; i++) {
         vec3 L;
         float attenuation = 1.0;
-        if (uLights[i].type == 0) { 
+        if (uLights[i].type == 0) {
             // Directional
             L = normalize(-uLights[i].direction);
-        } else { 
+        } else {
             //Point/Spot
             vec3 lightVec = uLights[i].position - FragPos;
             float distance = length(lightVec);
             L = normalize(lightVec);
             attenuation = 1.0 / (distance * distance + 0.0001);
-            if (uLights[i].type == 2) { 
+            if (uLights[i].type == 2) {
                 //Spot
                 float theta = dot(L, normalize(-uLights[i].direction));
                 float epsilon = max(uLights[i].cutOff - uLights[i].outerCutOff, 0.0001);
@@ -199,7 +199,7 @@ void main() {
         }
         vec3 H = normalize(V + L);
         vec3 radiance = uLights[i].color * uLights[i].intensity * attenuation;
-        float D = D_GGX(N, H, currentRoughness);   
+        float D = D_GGX(N, H, currentRoughness);
         float G = G_Smith(N, V, L, currentRoughness);
         vec3 F = F_Schlick(H, V, albedo, currentMetallic);
         vec3 specular = (D * F * G) / (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);

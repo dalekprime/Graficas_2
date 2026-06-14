@@ -7,7 +7,7 @@ uniform mat4 uInvView;
 uniform mat4 uInvProj;
 uniform vec2 uResolution;
 
-uniform int uMaxBounces; 
+uniform int uMaxBounces;
 uniform vec3 uAmbientColor;
 uniform vec3 uSceneMin;
 uniform vec3 uSceneMax;
@@ -204,7 +204,7 @@ vec3 ComputeLocalIllumination(Ray ray, HitRecord hit, GPUMaterial mat) {
     if (albedoTexID >= 0 && albedoTexID < 16) {
         albedo = texture(uTextures[albedoTexID], hit.uv).rgb;
     }
-    float roughness = max(mat.properties.x, 0.05); 
+    float roughness = max(mat.properties.x, 0.05);
     float metallic = mat.properties.y;
     vec3 ambient = albedo * uAmbientColor;
     vec3 totalLo = vec3(0.0);
@@ -212,16 +212,16 @@ vec3 ComputeLocalIllumination(Ray ray, HitRecord hit, GPUMaterial mat) {
         vec3 L;
         float attenuation = 1.0;
         float distToLight = MAX_DIST;
-        if (uLights[i].type == 0) { 
+        if (uLights[i].type == 0) {
             //DIRECCIONAL
             L = -uLights[i].direction;
-        } else { 
+        } else {
             //POINT o SPOT
             vec3 lightVec = uLights[i].position - hit.point;
             distToLight = length(lightVec);
             L = normalize(lightVec);
             attenuation = 1.0 / (distToLight * distToLight + 0.0001);
-            if (uLights[i].type == 2) { 
+            if (uLights[i].type == 2) {
                 //SPOT
                 float theta = dot(L, -uLights[i].direction);
                 float epsilon = max(uLights[i].cutOff - uLights[i].outerCutOff, 0.0001);
@@ -267,7 +267,7 @@ struct StackItem {
 void main() {
     Ray primaryRay = GenerateRay(gl_FragCoord.xy);
     vec3 finalColor = vec3(0.0);
-    StackItem stack[MAX_STACK]; 
+    StackItem stack[MAX_STACK];
     int stackPtr = 0;
     stack[stackPtr] = StackItem(primaryRay, vec3(1.0), 0);
     while (stackPtr >= 0 && stackPtr < MAX_STACK) {
@@ -281,7 +281,7 @@ void main() {
         if (!hit.hit) {
             vec3 unitDir = normalize(current.ray.direction);
             float t_sky = 0.5 * (unitDir.y + 1.0);
-            vec3 skyColor = mix(vec3(1.0, 1.0, 1.0), vec3(0.5, 0.7, 1.0), t_sky); 
+            vec3 skyColor = mix(vec3(1.0, 1.0, 1.0), vec3(0.5, 0.7, 1.0), t_sky);
             finalColor += current.throughput * skyColor;
             continue;
         }
@@ -317,7 +317,7 @@ void main() {
             }
         }
         //Espejo
-        else if (matType == 1) { 
+        else if (matType == 1) {
             vec3 refDir = reflect(current.ray.direction, hit.normal);
             Ray refRay = Ray(hit.point + hit.geomNormal * EPSILON, refDir);
             if (stackPtr < MAX_STACK - 1) {
@@ -329,12 +329,12 @@ void main() {
         else if (matType == 2) {
             float ior = mat.properties.z;
             float eta = hit.frontFace ? (1.0 / ior) : ior;
-            float cosTheta = dot(-current.ray.direction, hit.normal); 
+            float cosTheta = dot(-current.ray.direction, hit.normal);
             vec3 refrDir = refract(current.ray.direction, hit.normal, eta);
             float R;
             float sinT2 = eta * eta * (1.0 - cosTheta * cosTheta);
             if (sinT2 > 1.0 || length(refrDir) == 0.0) {
-                R = 1.0; 
+                R = 1.0;
             } else {
                 float cosX = (eta > 1.0) ? sqrt(1.0 - sinT2) : cosTheta;
                 float r0 = (1.0 - ior) / (1.0 + ior);

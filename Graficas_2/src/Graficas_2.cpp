@@ -64,7 +64,7 @@ void MainEngine::SetupWindow() {
 	} catch (const std::exception& e) {
 		std::cout << "Aviso: " << e.what() << " (Se iniciará una escena vacía)" << std::endl;
 	};
-	
+
 	// Agregar plano de suelo dinamico
 	actualScene->AddRootNode(Solid::GeneratePlane(10.0f));
     //Shadows
@@ -118,7 +118,7 @@ void MainEngine::RenderPreview() {
 	previewNode->Draw(*flatShader, dummyCam, false);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	//Restaurar Viewport principal
-	glViewport(0, 0, width, height); 
+	glViewport(0, 0, width, height);
 }
 
 void MainEngine::MainLoop() {
@@ -259,7 +259,7 @@ void MainEngine::DrawUI() {
     ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "FPS: %.1f", ImGui::GetIO().Framerate);
     ImGui::Separator();
     ImGui::Text("Iluminacion y Materiales");
-    
+
     if (actualCamera->type != CameraType::RAYTRACING) {
         ImGui::Text("Modelo de Iluminacion");
         ImGui::RadioButton("Flat", &lightModel, 0); ImGui::SameLine();
@@ -271,7 +271,7 @@ void MainEngine::DrawUI() {
         ImGui::Separator();
         ImGui::Text("Tipo de Sombras");
         if (ImGui::RadioButton("Planar", &shadowModel, 0)) shadowEngine->SetShadowType(PLANAR); ImGui::SameLine();
-        if (ImGui::RadioButton("Mapping", &shadowModel, 1)) shadowEngine->SetShadowType(MAPPING); 
+        if (ImGui::RadioButton("Mapping", &shadowModel, 1)) shadowEngine->SetShadowType(MAPPING);
         //ImGui::SameLine();
         //if (ImGui::RadioButton("Volumen", &shadowModel, 2)) shadowEngine->SetShadowType(VOLUMEN);
         if (shadowModel == 0) {
@@ -299,7 +299,7 @@ void MainEngine::DrawUI() {
         ImGui::SliderInt("Rebotes", &(actualScene->rtMaxBounces), 1, 12);
         ImGui::ColorEdit3("Color de Ambiente", glm::value_ptr(actualScene->rtAmbientColor));
     }
-    
+
     if (ImGui::CollapsingHeader("Gestor de Luces")) {
         if (ImGui::Button("Agregar Luz") && actualScene->lights.size() < 8) {
             actualScene->lights.push_back(std::make_shared<Light>());
@@ -454,7 +454,7 @@ void MainEngine::DrawUI() {
         glm::vec3 skew;
         glm::vec4 perspective;
         glm::decompose(selectedNode->localMatrix, scale, rotation, translation, skew, perspective);
-        
+
         glm::vec3 euler = glm::degrees(glm::eulerAngles(rotation));
         bool matrixChanged = false;
 
@@ -478,9 +478,9 @@ void MainEngine::DrawUI() {
             ImGui::Text("Texturas");
             const char* texTypes[] = { "Base Color", "Normal Map", "PBR Map" };
             for (size_t i = 0; i < 3; ++i) {
-                std::shared_ptr<Texture>& currentMap = (i == 0) ? selectedNode->material->albedoMap : 
+                std::shared_ptr<Texture>& currentMap = (i == 0) ? selectedNode->material->albedoMap :
                                                        (i == 1) ? selectedNode->material->normalMap : selectedNode->material->pbrMap;
-                
+
                 GLuint texID = currentMap ? currentMap->ID : 0;
                 if (texID != 0) {
                     ImGui::Text("%s: ID %u", texTypes[i], texID);
@@ -512,10 +512,10 @@ void MainEngine::DrawUI() {
                             auto newTex = std::make_shared<Texture>(bytes, imgWidth, imgHeight, imgChannels, texTypeEnum);
                             newTex->path = newTexturePath;
                             actualScene->textureCache.push_back(newTex);
-                            
+
                             // Asignar al material del nodo seleccionado
                             currentMap = newTex;
-                            
+
                             stbi_image_free(bytes);
                         } else {
                             std::cerr << "Error cargando textura: " << newTexturePath << std::endl;
@@ -525,7 +525,7 @@ void MainEngine::DrawUI() {
                 }
             }
         }
-        
+
         if (selectedNode->mesh) {
             ImGui::Separator();
             ImGui::Text("Mapeo UV Procedural (Solo Normal Map)");

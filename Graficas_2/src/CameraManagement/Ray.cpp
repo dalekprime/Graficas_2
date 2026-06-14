@@ -1,7 +1,6 @@
 #include "Ray.h"
 
 
-
 Ray::Ray(glm::vec3 origin, glm::vec3 direction, glm::vec3 color) :
     origin(origin), direction(direction), color(color),
     vao(nullptr), vbo(nullptr), hasHit(false), initialized(false) {}

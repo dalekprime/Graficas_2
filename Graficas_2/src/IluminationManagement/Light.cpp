@@ -2,8 +2,8 @@
 #include <vector>
 
 Light::Light(LightType type, glm::vec3 pos):
-        type(type), position(pos), direction(0.0f, -1.0f, 0.0f), 
-      color(1.0f, 1.0f, 1.0f), intensity(1.0f), 
+        type(type), position(pos), direction(0.0f, -1.0f, 0.0f),
+      color(1.0f, 1.0f, 1.0f), intensity(1.0f),
       cutOff(glm::cos(glm::radians(30.0f))), outerCutOff(glm::cos(glm::radians(45.0f))),
       showGizmo(true), vao(0), vbo(0){}
 
@@ -62,25 +62,25 @@ void Light::setupGizmo() {
         float radius = height * glm::tan(angle);
         glm::vec3 tip(0.0f, 0.0f, 0.0f);
         glm::vec3 baseCenter(0.0f, 0.0f, height);
-        
+
         for (int i = 0; i < segments; i++) {
             float theta1 = ((float)i / segments) * 2.0f * glm::pi<float>();
             float theta2 = ((float)(i + 1) / segments) * 2.0f * glm::pi<float>();
             glm::vec3 p1(radius * glm::cos(theta1), radius * glm::sin(theta1), height);
             glm::vec3 p2(radius * glm::cos(theta2), radius * glm::sin(theta2), height);
-            
+
             // Triangulo desde la punta hasta la base
             vertices.push_back(tip.x); vertices.push_back(tip.y); vertices.push_back(tip.z);
             vertices.push_back(p1.x);  vertices.push_back(p1.y);  vertices.push_back(p1.z);
             vertices.push_back(p2.x);  vertices.push_back(p2.y);  vertices.push_back(p2.z);
-            
+
             // Triangulo para la tapa de la base
             vertices.push_back(baseCenter.x); vertices.push_back(baseCenter.y); vertices.push_back(baseCenter.z);
             vertices.push_back(p2.x);         vertices.push_back(p2.y);         vertices.push_back(p2.z);
             vertices.push_back(p1.x);         vertices.push_back(p1.y);         vertices.push_back(p1.z);
         }
     }
-    
+
     numVertices = vertices.size() / 3;
     glGenVertexArrays(1, &vao);
     glGenBuffers(1, &vbo);
@@ -95,7 +95,7 @@ void Light::setupGizmo() {
 
 void Light::DrawGizmo(ShaderProgram& shaderProgram) {
     if (!showGizmo) return;
-    setupGizmo();   
+    setupGizmo();
     glm::mat4 model = glm::translate(glm::mat4(1.0f), position);
     if (type == DIRECTIONAL || type == SPOT) {
         glm::vec3 dir = glm::normalize(direction);

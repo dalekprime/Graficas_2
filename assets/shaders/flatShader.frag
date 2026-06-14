@@ -47,9 +47,9 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir) {
         vec2 texel = 1.0 / textureSize(uShadowMap, 0);
         for(int x = -pcfLimit; x <= pcfLimit; x++) {
             for(int y = -pcfLimit; y <= pcfLimit; y++) {
-                float d = texture(uShadowMap, proj.xy + vec2(x, y) * texel).r; 
-                shadowPCF += currentDepth - bias > d ? 1.0 : 0.0;        
-            }    
+                float d = texture(uShadowMap, proj.xy + vec2(x, y) * texel).r;
+                shadowPCF += currentDepth - bias > d ? 1.0 : 0.0;
+            }
         }
         return shadowPCF / float(pcfSize * pcfSize);
     } else if(pcfSize == 0) {
@@ -80,10 +80,10 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir) {
         int samples = 0;
         for(int x = -2; x <= 2; x++) {
             for(int y = -2; y <= 2; y++) {
-                float d = texture(uShadowMap, proj.xy + vec2(x, y) * texel * filterRadius).r; 
+                float d = texture(uShadowMap, proj.xy + vec2(x, y) * texel * filterRadius).r;
                 shadowPCSS += (currentDepth - bias > d) ? 1.0 : 0.0;
                 samples++;
-            }    
+            }
         }
         return shadowPCSS / float(samples);
     }
@@ -99,9 +99,9 @@ void main() {
     for(int i = 0; i < uNumLights; i++) {
         vec3 lightDir;
         float attenuation = 1.0;
-        if (uLights[i].type == 0) { 
+        if (uLights[i].type == 0) {
             lightDir = normalize(-uLights[i].direction);
-        } else { 
+        } else {
             float distance = length(uLights[i].position - FragPos);
             lightDir = normalize(uLights[i].position - FragPos);
             attenuation = 1.0 / max(distance * distance, 1.0);
@@ -131,8 +131,8 @@ void main() {
         baseColor = (totalDiffuse + vec3(0.15)) * Color * uBaseColorFactor.rgb;
     }
     vec4 finalColor = vec4(baseColor, 1.0);
-    
-            
+
+
     if (isSelected == 1) {
         if (uSelectedTriangle < 0 || gl_PrimitiveID == uSelectedTriangle) {
             finalColor = mix(finalColor, vec4(uHighlightColor, 1.0), 0.5);
@@ -149,5 +149,5 @@ void main() {
             FragColor = vec4(vec3(depthVal), 1.0);
         }
     }
-    
+
 }

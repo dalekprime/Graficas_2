@@ -37,7 +37,7 @@ public:
 	std::vector<GLuint> indices;
 	glm::vec3 aabbMinLocal = glm::vec3(0.0f);
 	glm::vec3 aabbMaxLocal = glm::vec3(0.0f);
-	
+
 	Mesh(const std::vector<Vertex>& v, const std::vector<GLuint>& i);
 	void Draw();
 	void UpdateLocalAABB();

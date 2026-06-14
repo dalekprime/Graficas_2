@@ -5,29 +5,29 @@ void Material::Bind(ShaderProgram& shader) {
 	shader.SetFloat("uRoughness", roughnessFactor);
 	shader.SetFloat("uAoFactor", aoFactor);
 	shader.SetVec4("uBaseColorFactor", baseColorFactor);
-	
+
 	int hasAlbedo = 0;
 	int hasNormal = 0;
 	int hasPbr = 0;
-	
+
 	if (albedoMap != nullptr) {
 	    glBindTextureUnit(0, albedoMap->ID);
 	    shader.SetInt("u_albedoMap", 0);
 	    hasAlbedo = 1;
 	}
-	
+
 	if (normalMap != nullptr) {
 	    glBindTextureUnit(1, normalMap->ID);
 	    shader.SetInt("u_normalMap", 1);
 	    hasNormal = 1;
 	}
-	
+
 	if (pbrMap != nullptr) {
 	    glBindTextureUnit(2, pbrMap->ID);
 	    shader.SetInt("u_pbrMap", 2);
 	    hasPbr = 1;
 	}
-	
+
 	shader.SetInt("uHasAlbedoMap", hasAlbedo);
 	shader.SetInt("uHasNormalMap", hasNormal);
 	shader.SetInt("uHasPbrMap", hasPbr);
@@ -36,7 +36,7 @@ void Material::Bind(ShaderProgram& shader) {
 Mesh::Mesh(const std::vector<Vertex>& v, const std::vector<GLuint>& i):
 	vertices(v), indices(i) {
 	UpdateLocalAABB();
-	
+
 	vao = std::make_unique<VAO>();
 	vbo = std::make_unique<VBO>(vertices);
 	ebo = std::make_unique<EBO>(indices);

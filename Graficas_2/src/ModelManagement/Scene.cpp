@@ -50,12 +50,12 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
                     }
                     m.properties.x = node->material->roughnessFactor;
                     m.properties.y = node->material->metallicFactor;
-                    m.properties.z = 1.5f; 
+                    m.properties.z = 1.5f;
                     if (node->material->baseColorFactor.a < 0.9f) {
                         m.properties.w = 2.0f;
                     }
                     else {
-                        m.properties.w = 0.0f; 
+                        m.properties.w = 0.0f;
                     }
                     gpuMaterials.push_back(m);
                 } else {
@@ -111,7 +111,7 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
     for (const auto& rootNode : rootNodes) {
         ProcessNodeForRT(rootNode.get(), ProcessNodeForRT);
     }
-    if (gpuVertices.empty()) return; 
+    if (gpuVertices.empty()) return;
     if (rtVertexSSBO == 0) glGenBuffers(1, &rtVertexSSBO);
     if (rtIndexSSBO == 0) glGenBuffers(1, &rtIndexSSBO);
     if (rtMaterialSSBO == 0) glGenBuffers(1, &rtMaterialSSBO);
@@ -149,7 +149,7 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
     shader.SetInt("uNumNodes", (int)gpuNodes.size());
     shader.SetVec3("uAmbientColor", rtAmbientColor);
     for (size_t i = 0; i < textureCache.size() && i < 16; i++) {
-        textureCache[i]->Bind(i + 5); 
+        textureCache[i]->Bind(i + 5);
         shader.SetInt(("uTextures[" + std::to_string(i) + "]").c_str(), i + 5);
     }
     shader.SetInt("uNumLights", (int)lights.size());
@@ -191,7 +191,7 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
     glBindVertexArray(0);
 }
 
-std::shared_ptr<Texture> Scene::LoadTexture(int textureIndex, texType type, 
+std::shared_ptr<Texture> Scene::LoadTexture(int textureIndex, texType type,
                     tinygltf::Model& model, std::vector<std::shared_ptr<Texture>>& Map, const std::string& basePath) {
     if (textureIndex < 0) return nullptr;
     if (Map[textureIndex] != nullptr) return Map[textureIndex];
@@ -207,18 +207,18 @@ std::shared_ptr<Texture> Scene::LoadTexture(int textureIndex, texType type,
         std::string fullPath = basePath + gltfImage.uri;
         std::cout << fullPath << std::endl;
         newTex = std::make_shared<Texture>(fullPath.c_str(), type, 0, GL_RGB);
-    } 
+    }
     else {
         return nullptr;
     }
-    
+
     newTex->path = gltfImage.uri;
     Map[textureIndex] = newTex;
     textureCache.push_back(newTex);
     return newTex;
 }
 
-bool Scene::GetAttributeData(const std::string& attrName, const unsigned char*& outData, 
+bool Scene::GetAttributeData(const std::string& attrName, const unsigned char*& outData,
                     int& outStride, tinygltf::Model& model, tinygltf::Primitive& primitive) {
     auto actualPrimitive = primitive.attributes.find(attrName);
     if (actualPrimitive == primitive.attributes.end()) return false;
@@ -507,7 +507,7 @@ void Scene::LoadFromGLTF(const std::string& filename) {
             if (camNode) {
                 newCam.position = glm::vec3(camNode->worldMatrix[3]);
                 newCam.orientation = glm::normalize(glm::vec3(-camNode->worldMatrix[2]));
-                newCam.up = glm::normalize(glm::vec3(camNode->worldMatrix[1])); 
+                newCam.up = glm::normalize(glm::vec3(camNode->worldMatrix[1]));
             }
             this->cameras.push_back(newCam);
         }
@@ -540,11 +540,11 @@ void Scene::SaveToGLTF(const std::string& filename, Camera* currentCamera) {
         gltfCam.perspective.znear = cameras[i].znear;
         gltfCam.perspective.zfar = cameras[i].zfar;
         gltfCam.perspective.aspectRatio = (float)cameras[i].width / (float)cameras[i].height;
-        
+
         tinygltf::Value::Object extras;
         extras["cameraType"] = tinygltf::Value(static_cast<int>(cameras[i].type));
         gltfCam.extras = tinygltf::Value(extras);
-        
+
         model.cameras.push_back(gltfCam);
         tinygltf::Node camNode;
         camNode.name = "CameraNode_" + std::to_string(i);
@@ -556,7 +556,7 @@ void Scene::SaveToGLTF(const std::string& filename, Camera* currentCamera) {
         model.nodes.push_back(camNode);
         gltfScene.nodes.push_back(static_cast<int>(model.nodes.size() - 1));
     }
-    
+
     // Export Camera State si existe
     if (currentCamera) {
         tinygltf::Camera gltfCam;
@@ -564,29 +564,29 @@ void Scene::SaveToGLTF(const std::string& filename, Camera* currentCamera) {
         gltfCam.perspective.yfov = glm::radians(currentCamera->fov);
         gltfCam.perspective.znear = currentCamera->znear;
         gltfCam.perspective.zfar = currentCamera->zfar;
-        
+
         tinygltf::Value::Object extras;
         extras["cameraType"] = tinygltf::Value(static_cast<int>(currentCamera->type));
         gltfCam.extras = tinygltf::Value(extras);
-        
+
         model.cameras.push_back(gltfCam);
-        
+
         tinygltf::Node camNode;
         camNode.camera = static_cast<int>(model.cameras.size() - 1);
         camNode.name = "SavedCamera";
         camNode.translation = { currentCamera->position.x, currentCamera->position.y, currentCamera->position.z };
-        
+
         // Calcular Quaternion desde la Orientacion y el Up
         glm::mat4 viewMatrix = glm::lookAt(currentCamera->position, currentCamera->position + currentCamera->orientation, currentCamera->up);
         // La matriz view transforma de mundo a cámara. La rotación del nodo glTF es de cámara a mundo (inversa de view)
         glm::mat4 camToWorld = glm::inverse(viewMatrix);
         glm::quat q = glm::quat_cast(camToWorld);
         camNode.rotation = { q.x, q.y, q.z, q.w };
-        
+
         model.nodes.push_back(camNode);
         gltfScene.nodes.push_back(static_cast<int>(model.nodes.size() - 1));
     }
-    
+
     //Vincular la escena y el buffer principal al modelo
     model.scenes.push_back(gltfScene);
     model.defaultScene = 0;
