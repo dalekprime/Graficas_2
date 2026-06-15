@@ -99,6 +99,7 @@ void ShadowEngine::RenderMapping(Scene& scene, Camera& camera, ShaderProgram& ac
 	actualShader.SetFloat("bias", bias);
 	actualShader.SetInt("pcfSize", pcfSize);
 	actualShader.SetFloat("pcssSize", pcssSize);
+	actualShader.SetInt("pcssSizeBlur", pcssSizeBlur);
 }
 
 void ShadowEngine::RenderVolumen(Scene& scene, Camera& camera, ShaderProgram& actualShader) {

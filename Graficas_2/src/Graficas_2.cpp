@@ -267,7 +267,6 @@ void MainEngine::DrawUI() {
         ImGui::RadioButton("Phong", &lightModel, 2); ImGui::SameLine();
         ImGui::RadioButton("Blinn-Phong", &lightModel, 3); ImGui::SameLine();
         ImGui::RadioButton("PBR", &lightModel, 4);
-
         ImGui::Separator();
         ImGui::Text("Tipo de Sombras");
         if (ImGui::RadioButton("Planar", &shadowModel, 0)) shadowEngine->SetShadowType(PLANAR); ImGui::SameLine();
@@ -286,6 +285,9 @@ void MainEngine::DrawUI() {
             ImGui::RadioButton("PCSS", &(shadowEngine->pcfSize), -1);
             if (shadowEngine->pcfSize == -1) {
                 ImGui::SliderFloat("Suavidad PCSS", &(shadowEngine->pcssSize), 10.0f, 300.0f);
+                ImGui::RadioButton("PCSS: 3X3", &(shadowEngine->pcssSizeBlur), 3); ImGui::SameLine();
+                ImGui::RadioButton("PCSS: 5X5", &(shadowEngine->pcssSizeBlur), 5); ImGui::SameLine();
+                ImGui::RadioButton("PCSS: 7X7", &(shadowEngine->pcssSizeBlur), 7);
             }
             //Modos de Visualizacion
             ImGui::Separator();
@@ -299,7 +301,6 @@ void MainEngine::DrawUI() {
         ImGui::SliderInt("Rebotes", &(actualScene->rtMaxBounces), 1, 12);
         ImGui::ColorEdit3("Color de Ambiente", glm::value_ptr(actualScene->rtAmbientColor));
     }
-
     if (ImGui::CollapsingHeader("Gestor de Luces")) {
         if (ImGui::Button("Agregar Luz") && actualScene->lights.size() < 8) {
             actualScene->lights.push_back(std::make_shared<Light>());
@@ -316,7 +317,6 @@ void MainEngine::DrawUI() {
                 if (ImGui::Combo("Tipo", &currentType, lightTypes, IM_ARRAYSIZE(lightTypes))) {
                     light->type = (LightType)currentType;
                 }
-
                 ImGui::Checkbox("Mostrar Gizmo", &light->showGizmo);
                 ImGui::ColorEdit3("Color", glm::value_ptr(light->color));
                 ImGui::DragFloat("Intensidad", &light->intensity, 0.1f, 0.0f, 100.0f);
@@ -332,7 +332,6 @@ void MainEngine::DrawUI() {
                         }
                     }
                 }
-
                 if (light->type == SPOT) {
                     float innerAngle = glm::degrees(glm::acos(light->cutOff));
                     float outerAngle = glm::degrees(glm::acos(light->outerCutOff));

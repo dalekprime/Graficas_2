@@ -35,6 +35,7 @@ public:
 	//Bias y PCF para Shadow Mapping
 	float bias = 0.005;
 	int pcfSize = 3;
+	int pcssSizeBlur = 5;
 	float pcssSize = 100.0f;
 	ShadowEngine(ShadowType type);
 	~ShadowEngine();

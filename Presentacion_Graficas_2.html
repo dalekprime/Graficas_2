@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Análisis del Proyecto: Graficas_2</title>
+    <!-- Highlight.js para sintaxis de código -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+    <!-- MathJax para fórmulas matemáticas -->
+    <!-- Eliminado polyfill.io por problemas de seguridad/redirecciones -->
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #181a1b; color: #e8e6e3; overflow-x: hidden; scroll-behavior: smooth; }
+        .slides-container { display: flex; flex-direction: column; width: 100%; }
+        .slide { min-height: 100vh; padding: 60px 80px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; border-bottom: 2px solid #2a2d2e; }
+        .slide h1 { color: #5cb85c; font-size: 3.5em; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        .slide h2 { color: #5bc0de; font-size: 2.2em; margin-bottom: 15px; }
+        .content { font-size: 1.3em; line-height: 1.6; }
+        .columns { display: flex; gap: 40px; margin-top: 20px; }
+        .col { flex: 1; min-width: 0; }
+        pre { background: #282c34; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 0.75em; border: 1px solid #3e4451; }
+        .nav-buttons { position: fixed; bottom: 30px; right: 30px; z-index: 1000; }
+        button { background: #5cb85c; border: none; color: #fff; padding: 12px 24px; font-size: 1.1em; cursor: pointer; border-radius: 5px; margin-left: 10px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: background 0.3s; }
+        button:hover { background: #4cae4c; }
+        .mermaid { text-align: center; background: #e8e6e3; padding: 20px; border-radius: 10px; margin: 20px 0; color: #000; }
+        .formula-box { background: #222; padding: 15px; border-left: 4px solid #5bc0de; margin: 15px 0; font-size: 1.1em;}
+        .cover-slide { text-align: center; justify-content: center; align-items: center; }
+        .cover-slide h1 { font-size: 5em; border: none; margin-bottom: 0; }
+        .cover-slide h2 { color: #888; font-size: 2em; margin-top: 10px; }
+    </style>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</head>
+<body>
+    <div class="slides-container" id="slides">
+        
+        <!-- Lámina 1: Portada -->
+        <div class="slide cover-slide" id="slide-0">
+            <h1>Graficas_2</h1>
+            <h2>Motor de Renderizado Híbrido C++ / OpenGL</h2>
+            <p class="content" style="color: #aaa; margin-top: 40px;">Autor: Bryan Silva (UCV)<br>Técnicas de Rasterización y Ray Tracing</p>
+        </div>
+
+        <!-- Lámina 2: Arquitectura General -->
+        <div class="slide" id="slide-1">
+            <h1>1. Arquitectura del Motor</h1>
+            <div class="columns content">
+                <div class="col">
+                    <p>El proyecto es un motor híbrido que combina el pipeline tradicional de <strong>Rasterización</strong> con algoritmos de <strong>Ray Tracing</strong> por GPU. Todo se ha diseñado de manera altamente acoplada usando un grafo de escena jerárquico.</p>
+                    <ul>
+                        <li><strong>Scene Management:</strong> Abstracción usando nodos y parseo nativo de glTF mediante TinyGLTF.</li>
+                        <li><strong>Materiales:</strong> Abstracción física PBR (Cook-Torrance).</li>
+                        <li><strong>Shaders:</strong> Rasterización (Planar, Lambert, Blinn-Phong, PBR) y Compute/Fragment (RayTracing).</li>
+                    </ul>
+                </div>
+                <div class="col">
+                    <div class="mermaid">
+                    graph TD
+                        A[Scene Graph] --> B(Nodes)
+                        B --> C[Mesh & Geometry]
+                        B --> D[Material PBR]
+                        A --> E[Shadow Engine]
+                        E --> F(Shadow Mapping)
+                        E --> G(PCSS & PCF)
+                        A --> H[Ray Tracing Engine]
+                        H --> I(SSBO Packing)
+                        I --> J(RTShader.frag)
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lámina 3: Carga de Escenas -->
+        <div class="slide" id="slide-2">
+            <h1>2. Carga y Serialización (glTF)</h1>
+            <div class="columns content">
+                <div class="col">
+                    <h2>Estructura Jerárquica</h2>
+                    <p>El motor implementa un Grafo de Escena. La posición en el mundo de cualquier nodo se calcula propagando su matriz local hacia abajo:</p>
+                    <div class="formula-box">
+                        $$ M_{mundo} = M_{padre} \times M_{local} $$
+                        $$ M_{local} = T \times R \times S $$
+                    </div>
+                    <p>Se utiliza <code>TinyGLTF</code> para parsear los arreglos binarios (buffers) decodificando las posiciones, normales, y UVs.</p>
+                </div>
+                <div class="col">
+                    <pre><code class="language-cpp">
+// Extracción de Datos Crudos en Scene::LoadFromGLTF
+if (GetAttributeData("POSITION", dataPtr, stride, model, primitive)) {
+    for (size_t i = 0; i < vertices.size(); i++) {
+        const float* ptr = reinterpret_cast<const float*>(dataPtr + i * stride);
+        vertices[i].position = glm::vec3(ptr[0], ptr[1], ptr[2]);
+    }
+}
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lámina 4: Sólidos de Revolución y Bézier -->
+        <div class="slide" id="slide-3">
+            <h1>3. Sólidos de Revolución (Bézier)</h1>
+            <div class="columns content">
+                <div class="col">
+                    <h2>Algoritmo de De Casteljau</h2>
+                    <p>Para construir el perfil de revolución, se evalúa una curva de Bézier mediante el algoritmo de De Casteljau, el cual interpola linealmente puntos de control iterativamente:</p>
+                    <div class="formula-box">
+                        $$ P_i^{(k)} = (1 - t) P_i^{(k-1)} + t P_{i+1}^{(k-1)} $$
+                    </div>
+                    <p>Una vez obtenido el perfil 2D, se extruye a 3D barriendo un ángulo de 0 a 360 grados ($2\pi$) alrededor de un eje (ej. Eje Y).</p>
+                </div>
+                <div class="col">
+                    <pre><code class="language-cpp">
+// Revolución en Eje Y (Solid.cpp)
+for (int s = 0; s <= segments; s++) {
+    float angle = s * angleStep;
+    float cosA = glm::cos(angle);
+    float sinA = glm::sin(angle);
+    for (size_t p = 0; p < profile.size(); p++) {
+        v.position = glm::vec3(profile[p].x * cosA, 
+                               profile[p].y, 
+                               profile[p].x * -sinA);
+        vertices.push_back(v);
+    }
+}
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lámina 5: Espacio Tangente (Normal Mapping) -->
+        <div class="slide" id="slide-4">
+            <h1>4. Cálculo de Espacio Tangente</h1>
+            <div class="columns content">
+                <div class="col">
+                    <p>Para que el Normal Mapping (PBR) funcione, se requiere la base ortonormal TBN (Tangent, Bitangent, Normal). Esto se resuelve al calcular la derivada de las posiciones 3D respecto a las coordenadas UV.</p>
+                    <div class="formula-box">
+                        $$ \Delta P_1 = \Delta U_1 \mathbf{T} + \Delta V_1 \mathbf{B} $$
+                        $$ \Delta P_2 = \Delta U_2 \mathbf{T} + \Delta V_2 \mathbf{B} $$
+                    </div>
+                    <p>Invirtiendo la matriz, resolvemos para la Tangente ($\mathbf{T}$) y la Bitangente ($\mathbf{B}$). Posteriormente, se promedia a nivel de vértice y se ortogonaliza usando Gram-Schmidt.</p>
+                </div>
+                <div class="col">
+                    <pre><code class="language-cpp">
+// Cálculo de Tangentes (Solid.cpp)
+float r = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x);
+glm::vec3 tangent = (deltaPos1 * deltaUV2.y - deltaPos2 * deltaUV1.y) * r;
+glm::vec3 bitangent = (deltaPos2 * deltaUV1.x - deltaPos1 * deltaUV2.x) * r;
+
+vertices[i0].tangent += tangent;
+// Al final, se normaliza para promediar las caras adyacentes.
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lámina 6: Interacción y Ray Casting -->
+        <div class="slide" id="slide-5">
+            <h1>5. Interacción: Ray Casting (Mouse Picking)</h1>
+            <div class="columns content">
+                <div class="col">
+                    <h2>Möller-Trumbore (Ray-Triangle)</h2>
+                    <p>El rayo se lanza calculando el inverso de la Matriz de Vista y Proyección. Para intersectar eficientemente, se usa AABB como fase ancha, y Möller-Trumbore para precisión exacta usando coordenadas baricéntricas $(u, v)$.</p>
+                    <div class="formula-box">
+                        $$ \vec{O} + t\vec{D} = (1 - u - v)\vec{V_0} + u\vec{V_1} + v\vec{V_2} $$
+                        $$ \begin{bmatrix} t \\ u \\ v \end{bmatrix} = \frac{1}{\vec{D} \times \vec{E_2} \cdot \vec{E_1}} \begin{bmatrix} \vec{S} \times \vec{E_1} \cdot \vec{E_2} \\ \vec{D} \times \vec{E_2} \cdot \vec{S} \\ \vec{S} \times \vec{E_1} \cdot \vec{D} \end{bmatrix} $$
+                    </div>
+                </div>
+                <div class="col">
+                    <pre><code class="language-glsl">
+// Fragment Shader (RTShader.frag) Möller-Trumbore
+bool RayTriangleIntersect(Ray ray, vec3 v0, vec3 v1, vec3 v2, out float t, out vec2 uv) {
+    vec3 edge1 = v1 - v0;
+    vec3 edge2 = v2 - v0;
+    vec3 h = cross(ray.direction, edge2);
+    float a = dot(edge1, h);
+    if (abs(a) < 1e-7) return false;
+    float f = 1.0 / a;
+    vec3 s = ray.origin - v0;
+    float u = f * dot(s, h);
+    if (u < 0.0 || u > 1.0) return false;
+    vec3 q = cross(s, edge1);
+    float v = f * dot(ray.direction, q);
+    if (v < 0.0 || u + v > 1.0) return false;
+    t = f * dot(edge2, q);
+    uv = vec2(u, v);
+    return t > 0.001;
+}
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lámina 7: Iluminación PBR -->
+        <div class="slide" id="slide-6">
+            <h1>6. Iluminación PBR (Physically Based Rendering)</h1>
+            <div class="columns content">
+                <div class="col" style="flex: 1.2;">
+                    <h2>BRDF Cook-Torrance y Ecuación de Renderizado</h2>
+                    <p>El motor implementa el modelo de microfacetas estándar de la industria. La luz entrante se divide en energía difusa ($k_d$) y especular ($k_s$). La componente especular se resuelve con:</p>
+                    <div class="formula-box" style="font-size: 0.95em;">
+                        $$ f_{r} = k_d \frac{c_{albedo}}{\pi} + \frac{D \cdot F \cdot G}{4 (\omega_o \cdot n)(\omega_i \cdot n)} $$
+                    </div>
+                    <ul style="font-size: 0.9em;">
+                        <li><strong>D (Distribución Normal GGX):</strong> Estima qué porcentaje de microfacetas están alineadas con el vector Halfway $H$. Define el tamaño y brillo del reflejo especular basándose en la <i>Rugosidad</i> ($\alpha$).
+                            <br>$$ D(n, h, \alpha) = \frac{\alpha^2}{\pi ((n \cdot h)^2 (\alpha^2 - 1) + 1)^2} $$
+                        </li>
+                        <li><strong>F (Fresnel-Schlick):</strong> Describe la relación de luz reflejada vs refractada en ángulos rasantes. A mayor ángulo, las superficies se vuelven espejos perfectos.
+                            <br>$$ F(v, h) = F_0 + (1 - F_0)(1 - (v \cdot h))^5 $$
+                        </li>
+                        <li><strong>G (Geometría Schlick-GGX):</strong> Modela el auto-sombreado de las microfacetas (cuando unas bloquean a otras). Usa el método de Smith para combinar la oclusión del observador y la luz.</li>
+                    </ul>
+                </div>
+                <div class="col" style="flex: 0.8;">
+                    <pre><code class="language-glsl">
+// Distribución Normal (pbrShader.frag)
+float D_GGX(vec3 N, vec3 H, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
+    float denom = (NdotH*NdotH * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+    return a2 / max(denom, 0.0000001);
+}
+// Factor de Fresnel (Aproximación de Schlick)
+vec3 F_Schlick(vec3 H, vec3 V, vec3 albedo, float metalic) {
+    float HdotV = max(dot(H, V), 0.0);
+    vec3 F0 = mix(vec3(0.04), albedo, metalic); // F0 base
+    return F0 + (1.0 - F0) * pow(1.0 - HdotV, 5.0);
+}
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lámina 8: Esquema PBR -->
+        <div class="slide" id="slide-7">
+            <h1>7. Esquema Visual: PBR y Vectores</h1>
+            <div class="columns content">
+                <div class="col" style="flex: 1;">
+                    <p>En el PBR, la luz incidente se divide para conservar la energía general. Nunca se refleja más luz de la que entra.</p>
+                    <ul style="margin-top: 20px;">
+                        <li><strong>Lóbulo Difuso ($k_d$):</strong> La luz penetra ligeramente la superficie, rebotando internamente (dispersión) y volviendo a salir teñida uniformemente con el <i>Albedo</i>.</li>
+                        <li><strong>Lóbulo Especular ($k_s$):</strong> La luz rebota en la superficie de inmediato. El vector <strong>H (Halfway)</strong> es crucial para calcular matemáticamente cuántas microfacetas de la geometría apuntan exactamente hacia el observador.</li>
+                    </ul>
+                </div>
+                <div class="col" style="flex: 1.5;">
+                    <div class="mermaid">
+                    graph LR
+                        Light(Luz Incidente L) -->|Choca| Surface[Superficie Material PBR]
+                        Surface -->|Rebota Inmediatamente| Specular(Lóbulo Especular V - k_s)
+                        Surface -->|Penetra y Dispersa| Diffuse(Lóbulo Difuso - k_d)
+                        
+                        subgraph Interacción Vectorial
+                            N(Normal N)
+                            H(Vector Halfway H)
+                            L(Vector Luz L) -.->|Promedio| H
+                            V(Vector Vista V) -.->|Promedio| H
+                        end
+                        
+                        Specular -.->|Reflejo depende de| H
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lámina 9: Sombras 1 - Shadow Mapping -->
+        <div class="slide" id="slide-8">
+            <h1>8. Shadow Mapping Clásico y PCF</h1>
+            <div class="columns content">
+                <div class="col">
+                    <h2>El Mapa de Profundidad</h2>
+                    <p>La escena se renderiza primero desde la perspectiva de la luz para guardar la profundidad en el Z-Buffer (`depthMapFBO`). En el segundo paso, se compara la profundidad del fragmento actual contra el mapa.</p>
+                    <p><strong>Limitaciones y Soluciones:</strong></p>
+                    <ul>
+                        <li><strong>Shadow Acne:</strong> Se mitiga sumando un <code>Bias</code> pequeño a la comparación de profundidad.</li>
+                        <li><strong>Aliasing (Bordes Dentados):</strong> Se aplica <strong>PCF</strong> (Percentage Closer Filtering), haciendo muestreos promediados (Ej. kernel 3x3) en los texels vecinos.</li>
+                    </ul>
+                </div>
+                <div class="col">
+                    <pre><code class="language-glsl">
+// Percentage Closer Filtering (pbrShader.frag)
+float shadowPCF = 0.0;
+vec2 texel = 1.0 / textureSize(uShadowMap, 0);
+for(int x = -pcfLimit; x <= pcfLimit; x++) {
+    for(int y = -pcfLimit; y <= pcfLimit; y++) {
+        float d = texture(uShadowMap, proj.xy + vec2(x, y) * texel).r;
+        // Se aplica el Bias para evitar Shadow Acne
+        shadowPCF += currentDepth - bias > d ? 1.0 : 0.0;
+    }
+}
+return shadowPCF / float(pcfSize * pcfSize);
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lámina 10: Sombras Suaves (PCSS) -->
+        <div class="slide" id="slide-9">
+            <h1>9. Sombras Suaves (PCSS)</h1>
+            <div class="columns content">
+                <div class="col">
+                    <h2>Percentage Closer Soft Shadows</h2>
+                    <p>Simula el tamaño físico de la luz para lograr sombras nítidas de cerca y borrosas (penumbra) a lo lejos.</p>
+                    <ol>
+                        <li><strong>Blocker Search:</strong> Se busca en un radio los objetos que ocluyen y se promedia su profundidad ($d_{blocker}$).</li>
+                        <li><strong>Estimación de Penumbra:</strong><br>
+                        $$ w_{penumbra} = \frac{d_{receiver} - d_{blocker}}{d_{blocker}} \times w_{light} $$</li>
+                        <li><strong>Filtrado:</strong> Se ejecuta un PCF dinámico donde el radio del filtro es igual al tamaño de la penumbra calculada.</li>
+                    </ol>
+                </div>
+                <div class="col">
+                    <pre><code class="language-glsl">
+// Estimación de Penumbra y Filtro (pbrShader.frag)
+float distanceToBlocker = max(currentDepth - avgBlockerDepth, 0.0);
+float penumbra = distanceToBlocker * pcssSize;
+float filterRadius = clamp(penumbra, 1.0, 20.0);
+
+int samples = 0;
+for(int x = -2; x <= 2; x++) {
+    for(int y = -2; y <= 2; y++) {
+        float d = texture(uShadowMap, proj.xy + vec2(x,y) * texel * filterRadius).r;
+        shadowPCSS += (currentDepth - bias > d) ? 1.0 : 0.0;
+        samples++;
+    }
+}
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lámina 11: Esquema PCSS -->
+        <div class="slide" id="slide-10">
+            <h1>10. Esquema: Anatomía de la Penumbra (PCSS)</h1>
+            <div class="columns content">
+                <div class="col" style="flex: 1;">
+                    <p>A diferencia del <i>Shadow Mapping</i> clásico donde la luz se trata como un "punto" infinitamente pequeño, PCSS asume matemáticamente que la luz tiene un "Área" física (esfera o disco).</p>
+                    <p>Esto produce sombras hiper-realistas que se van difuminando progresivamente entre más lejos esté el objeto que proyecta la sombra del objeto que la recibe.</p>
+                </div>
+                <div class="col" style="flex: 1.5;">
+                    <div class="mermaid">
+                    sequenceDiagram
+                        participant L as Luz (Tiene un Área Real)
+                        participant B as Objeto Bloqueador
+                        participant S as Superficie Receptora
+                        
+                        L->>B: Proyecta Rayos Múltiples
+                        B->>S: Distancia Corta = Sombra Nítida (Umbra)
+                        L-->>S: Rayos se cruzan = Sombra Suave (Penumbra)
+                        
+                        Note over B, S: A mayor distancia entre el<br>Bloqueador y la Superficie,<br>más grande es el Radio de la Penumbra.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lámina 12: Ray Tracing Arquitectura -->
+        <div class="slide" id="slide-11">
+            <h1>11. Ray Tracing: Arquitectura y Stack Iterativo</h1>
+            <div class="columns content">
+                <div class="col">
+                    <h2>Abstracción SSBO y Bucle Principal</h2>
+                    <p>El motor recolecta toda la geometría (vértices, índices) y atributos (materiales, normales, nodos del grafo) y los empaqueta en <strong>Shader Storage Buffer Objects (SSBOs)</strong>, enviándolos al Fragment Shader (<code>RTShader.frag</code>).</p>
+                    <p>Ya que GLSL no permite recursión pura para re-lanzar rayos desde una intersección, se implementó un <strong>Stack Finito</strong> simulado en un arreglo de tamaño fijo (<code>MAX_STACK = 6</code>).</p>
+                    <ul>
+                        <li>Cada iteración evalúa la intersección (Möller-Trumbore) de todos los nodos.</li>
+                        <li>Se acumula el color en el parámetro <i>Throughput</i>.</li>
+                        <li>Dependiendo del material (Base, Espejo, Cristal), se hace <code>Push</code> de 1 o 2 rayos nuevos al Stack (ej. rayo reflejado y refractado).</li>
+                    </ul>
+                </div>
+                <div class="col">
+                    <pre><code class="language-glsl">
+// Bucle principal de Path Tracing Iterativo
+struct StackItem {
+    Ray ray;
+    vec3 throughput;
+    int depth;
+};
+StackItem stack[MAX_STACK];
+int stackPtr = 0;
+stack[stackPtr] = StackItem(primaryRay, vec3(1.0), 0);
+
+while (stackPtr >= 0 && stackPtr < MAX_STACK) {
+    StackItem current = stack[stackPtr];
+    stackPtr--; // Pop del rayo actual
+    
+    // Si la profundidad supera uMaxBounces, descartamos
+    if (current.depth >= uMaxBounces) continue;
+
+    HitRecord hit = TraverseScene(current.ray);
+    // Evaluamos intersección y el material...
+}
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lámina 13: Esquema Ray Tracing -->
+        <div class="slide" id="slide-12">
+            <h1>12. Esquema: Bucle Iterativo Path Tracing</h1>
+            <div class="columns content">
+                <div class="col" style="flex: 1;">
+                    <p>Este diagrama de flujo ilustra paso a paso la simulación de recursión alojada en la GPU.</p>
+                    <p>El stack se va llenando o vaciando en tiempo de ejecución para cada pixel de la pantalla, evaluando las interacciones físicas correspondientes según las propiedades matemáticas del modelo (refracción vs. reflexión vs. emisión).</p>
+                </div>
+                <div class="col" style="flex: 1.5;">
+                    <div class="mermaid">
+                    graph TD
+                        Start([Inicio: Disparar Rayo Primario de Cámara]) --> Push[Push al Stack]
+                        Push --> Loop{¿Stack no vacío?}
+                        Loop -->|Sí| Pop[Pop Rayo del Stack]
+                        Pop --> Intersect{¿Intersecta Geometría?}
+                        Intersect -->|No| Miss[Retornar Skybox]
+                        Intersect -->|Sí| Mat{Evaluar Tipo Material}
+                        
+                        Mat -->|Dieléctrico| Dielec[Ley Snell + TIR + Schlick]
+                        Dielec --> PushRefr[Push Rayo Refractado]
+                        Dielec --> PushRefl[Push Rayo Reflejado]
+                        
+                        Mat -->|Metal / Espejo| Metal[PBR Especular]
+                        Metal --> PushRefl
+                        
+                        PushRefr --> Loop
+                        PushRefl --> Loop
+                        
+                        Loop -->|No| End([Fin: Renderizar Color Final])
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lámina 14: Dieléctricos -->
+        <div class="slide" id="slide-13">
+            <h1>13. Ray Tracing: Refracción y Dieléctricos</h1>
+            <div class="columns content">
+                <div class="col" style="flex: 1.1;">
+                    <h2>Simulación de Cristal y Fluidos</h2>
+                    <p>Para procesar cristales o líquidos (<code>matType == 2</code>), la luz debe penetrar la geometría o reflejarse sobre ella dependiendo del ángulo de visión y la densidad del medio.</p>
+                    <ul style="font-size: 0.9em;">
+                        <li><strong>Ley de Snell:</strong> Determina la desviación de la luz usando el Índice de Refracción (IOR) relativo: $\eta = \frac{n_1}{n_2}$. GLSL provee <code>refract(D, N, eta)</code> para este fin.</li>
+                        <li><strong>Reflexión Interna Total (TIR):</strong> Al salir de un medio denso (ej. cristal a aire), si el ángulo supera el ángulo crítico, el rayo se refleja al 100% y no cruza la superficie.</li>
+                        <li><strong>Aproximación de Schlick:</strong> Calcula $R$, la probabilidad/cantidad de luz reflejada vs. refractada ($1-R$). Se apilan ambos rayos modulados por este ratio.</li>
+                    </ul>
+                </div>
+                <div class="col" style="flex: 0.9;">
+                    <pre><code class="language-glsl">
+// Dieléctricos (Cristal)
+float eta = hit.frontFace ? (1.0 / ior) : ior;
+vec3 refrDir = refract(current.ray.direction, hit.normal, eta);
+
+float R; // Coeficiente de Fresnel (Schlick)
+float sinT2 = eta * eta * (1.0 - cosTheta * cosTheta);
+if (sinT2 > 1.0 || length(refrDir) == 0.0) {
+    R = 1.0; // TIR: Reflexión Interna Total
+} else {
+    float r0 = pow((1.0 - ior) / (1.0 + ior), 2.0);
+    R = r0 + (1.0 - r0) * pow(1.0 - cosTheta, 5.0);
+}
+
+// Push Rayo Refractado (penetra)
+if (R < 1.0) {
+    stackPtr++;
+    stack[stackPtr] = StackItem(Ray(hit.point - EPSILON, refrDir), 
+                                current.throughput * (1.0 - R), current.depth + 1);
+}
+// Push Rayo Reflejado (rebota exterior)
+if (R > 0.0) {
+    stackPtr++;
+    stack[stackPtr] = StackItem(Ray(hit.point + EPSILON, refDir), 
+                                current.throughput * R, current.depth + 1);
+}
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lámina 15: Metales -->
+        <div class="slide" id="slide-14">
+            <h1>14. Ray Tracing: Metales y Espejos</h1>
+            <div class="columns content">
+                <div class="col">
+                    <h2>Reflexión Especular</h2>
+                    <p>Los metales puros y espejos tienen un comportamiento de absorción y rebote totalmente distinto a los no-metales (dieléctricos).</p>
+                    <ul>
+                        <li><strong>Espejo Perfecto (<code>matType == 1</code>):</strong> Toda la luz incidente rebota siguiendo la ley de reflexión: $R = D - 2(N \cdot D)N$. El vector se computa fácilmente con <code>reflect()</code> y se lanza un nuevo rayo al Stack sin pérdida de <i>Throughput</i> más que el albedo.</li>
+                        <li><strong>Metales Rugosos (<code>matType == 0</code> y <code>metallic > 0</code>):</strong> Interpola la reflectancia usando el PBR local, modulando por un $F_0$ coloreado por el Albedo Base. La dispersión disminuye la energía refleja basándose en la <i>Rugosidad</i>.</li>
+                    </ul>
+                </div>
+                <div class="col">
+                    <pre><code class="language-glsl">
+// Espejo Perfecto (matType == 1)
+vec3 refDir = reflect(current.ray.direction, hit.normal);
+Ray refRay = Ray(hit.point + hit.geomNormal * EPSILON, refDir);
+
+stackPtr++; // Agregamos al stack el nuevo rebote
+stack[stackPtr] = StackItem(refRay, current.throughput * baseAlbedo, current.depth + 1);
+
+// Metales PBR (matType == 0, metallic > 0.01)
+// ... se calcula la luz local ...
+vec3 F0 = mix(vec3(0.04), baseAlbedo, metallic);
+vec3 F = F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(1.0 - cosTheta, 5.0);
+float reflectionEnergy = 1.0 - roughness; // A menor rugosidad, más nítido el rayo
+
+if (reflectionEnergy > 0.05) {
+    vec3 refDir = reflect(current.ray.direction, hit.normal);
+    stackPtr++;
+    stack[stackPtr] = StackItem(Ray(hit.point + EPSILON, refDir), 
+                                current.throughput * F * reflectionEnergy, current.depth + 1);
+}
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lámina 16: Conclusiones -->
+        <div class="slide" id="slide-15">
+            <h1>15. Rendimiento y Conclusiones</h1>
+            <div class="columns content">
+                <div class="col">
+                    <h2>Observaciones Técnicas</h2>
+                    <ul>
+                        <li><strong>Rendimiento:</strong> La rasterización estándar corre sumamente rápida. Sin embargo, el módulo de Ray Tracing decae exponencialmente de acuerdo a la complejidad poligonal de la escena debido a la carencia de estructuras de aceleración eficientes reales como BVH Jerárquicos en el Shader (solo se chequean AABBs lineales simples por nodo).</li>
+                        <li><strong>Extensibilidad:</strong> Gracias al robusto parseador glTF abstraído sobre TinyGLTF, el motor está preparado para soportar virtualmente cualquier malla exportada desde Blender.</li>
+                        <li><strong>Limitación Estructural:</strong> Por cómo se diseñaron los SSBOs, la limitación máxima de texturas indexables nativamente suele rondar los 16-32 arrays paralelos debido a la arquitectura de OpenGL 4.6 Core.</li>
+                    </ul>
+                </div>
+                <div class="col">
+                    <div style="background: #222; padding: 30px; border-radius: 10px; border: 1px solid #444; text-align: center;">
+                        <h3 style="color: #5cb85c;">Fin de la Presentación</h3>
+                        <p style="color: #aaa;">Motor Académico de Técnicas de Computación Gráfica Avanzadas.</p>
+                        <p style="font-size: 0.8em; color: #777;">(Navega usando los botones inferiores o las flechas de tu teclado)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Navegación -->
+    <div class="nav-buttons">
+        <button onclick="prevSlide()">&#8592; Anterior</button>
+        <button onclick="nextSlide()">Siguiente &#8594;</button>
+    </div>
+
+    <script>
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.slide');
+
+        // Ocultar todas las slides, mostrar solo la activa pero suavemente con opacity
+        function updateSlideVisibility() {
+            slides.forEach((slide, index) => {
+                // Alternativa para simular un carrusel vertical
+            });
+        }
+
+        function showSlide(index) {
+            if (index < 0) index = 0;
+            if (index >= slides.length) index = slides.length - 1;
+            
+            // Animacion suave
+            slides[index].scrollIntoView({ behavior: 'smooth' });
+            currentSlide = index;
+        }
+
+        function nextSlide() { showSlide(currentSlide + 1); }
+        function prevSlide() { showSlide(currentSlide - 1); }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown') nextSlide();
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') prevSlide();
+        });
+        
+        // Setup initial
+        window.onload = () => {
+            window.scrollTo(0,0);
+            currentSlide = 0;
+        };
+    </script>
+</body>
+</html>

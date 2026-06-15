@@ -44,6 +44,7 @@ uniform int shadowType;
 uniform float bias;
 uniform int pcfSize;
 uniform float pcssSize;
+uniform int pcssSizeBlur;
 uniform sampler2D uShadowMap;
 uniform mat4 uLightSpaceMatrix;
 uniform int uShadowViewMode;
@@ -94,15 +95,14 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir) {
         float distanceToBlocker = max(currentDepth - avgBlockerDepth, 0.0);
         float penumbra = distanceToBlocker * pcssSize;
         float filterRadius = clamp(penumbra, 1.0, 20.0);
-        int samples = 0;
-        for(int x = -2; x <= 2; x++) {
-            for(int y = -2; y <= 2; y++) {
+        int samples = (pcssSizeBlur - 1)/2;
+        for(int x = -samples; x <= samples; x++) {
+            for(int y = -samples; y <= samples; y++) {
                 float d = texture(uShadowMap, proj.xy + vec2(x, y) * texel * filterRadius).r;
                 shadowPCSS += (currentDepth - bias > d) ? 1.0 : 0.0;
-                samples++;
             }
         }
-        return shadowPCSS / float(samples);
+        return shadowPCSS / float(pcssSizeBlur * pcssSizeBlur);
     }
 }
 
