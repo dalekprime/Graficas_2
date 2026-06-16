@@ -86,6 +86,8 @@ struct HitRecord {
     vec2 uv;
 };
 
+uniform float uAO;
+
 #define MAX_DIST 99999.0
 #define EPSILON 0.001
 
@@ -206,7 +208,7 @@ vec3 ComputeLocalIllumination(Ray ray, HitRecord hit, GPUMaterial mat) {
     }
     float roughness = max(mat.properties.x, 0.05);
     float metallic = mat.properties.y;
-    vec3 ambient = albedo * uAmbientColor;
+    vec3 ambient = albedo * uAmbientColor * uAO;
     vec3 totalLo = vec3(0.0);
     for(int i = 0; i < uNumLights; i++) {
         vec3 L;

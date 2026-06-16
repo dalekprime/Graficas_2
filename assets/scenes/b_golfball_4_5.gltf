@@ -1,0 +1,170 @@
+{
+    "asset" : {
+        "generator" : "Khronos glTF Blender I/O v3.4.50",
+        "version" : "2.0"
+    },
+    "scene" : 0,
+    "scenes" : [
+        {
+            "name" : "Scene",
+            "nodes" : [
+                1
+            ]
+        }
+    ],
+    "nodes" : [
+        {
+            "mesh" : 0,
+            "name" : "g_golfball"
+        },
+        {
+            "children" : [
+                0
+            ],
+            "name" : "b_golfball_4_5_grp",
+            "scale" : [
+                100,
+                100,
+                100
+            ]
+        }
+    ],
+    "materials" : [
+        {
+            "doubleSided" : true,
+            "name" : "m_golfball.001",
+            "normalTexture" : {
+                "index" : 0
+            },
+            "pbrMetallicRoughness" : {
+                "baseColorTexture" : {
+                    "index" : 1
+                },
+                "metallicRoughnessTexture" : {
+                    "index" : 2
+                }
+            }
+        }
+    ],
+    "meshes" : [
+        {
+            "name" : "Roundcube",
+            "primitives" : [
+                {
+                    "attributes" : {
+                        "POSITION" : 0,
+                        "TEXCOORD_0" : 1,
+                        "NORMAL" : 2
+                    },
+                    "indices" : 3,
+                    "material" : 0
+                }
+            ]
+        }
+    ],
+    "textures" : [
+        {
+            "sampler" : 0,
+            "source" : 0
+        },
+        {
+            "sampler" : 0,
+            "source" : 1
+        },
+        {
+            "sampler" : 0,
+            "source" : 2
+        }
+    ],
+    "images" : [
+        {
+            "mimeType" : "image/png",
+            "name" : "t_DefaultMaterial_Normal",
+            "uri" : "t_DefaultMaterial_Normal.png"
+        },
+        {
+            "mimeType" : "image/png",
+            "name" : "t_DefaultMaterial_BaseColor",
+            "uri" : "t_DefaultMaterial_BaseColor.png"
+        },
+        {
+            "mimeType" : "image/png",
+            "name" : "m_golfball_metal-t_DefaultMaterial_Roughness",
+            "uri" : "m_golfball_metal-t_DefaultMaterial_Roughness.png"
+        }
+    ],
+    "accessors" : [
+        {
+            "bufferView" : 0,
+            "componentType" : 5126,
+            "count" : 486,
+            "max" : [
+                0.021335000172257423,
+                0.04267000034451485,
+                0.021335000172257423
+            ],
+            "min" : [
+                -0.021335000172257423,
+                0,
+                -0.021335000172257423
+            ],
+            "type" : "VEC3"
+        },
+        {
+            "bufferView" : 1,
+            "componentType" : 5126,
+            "count" : 486,
+            "type" : "VEC2"
+        },
+        {
+            "bufferView" : 2,
+            "componentType" : 5126,
+            "count" : 486,
+            "type" : "VEC3"
+        },
+        {
+            "bufferView" : 3,
+            "componentType" : 5123,
+            "count" : 2304,
+            "type" : "SCALAR"
+        }
+    ],
+    "bufferViews" : [
+        {
+            "buffer" : 0,
+            "byteLength" : 5832,
+            "byteOffset" : 0,
+            "target" : 34962
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 3888,
+            "byteOffset" : 5832,
+            "target" : 34962
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 5832,
+            "byteOffset" : 9720,
+            "target" : 34962
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 4608,
+            "byteOffset" : 15552,
+            "target" : 34963
+        }
+    ],
+    "samplers" : [
+        {
+            "magFilter" : 9729,
+            "minFilter" : 9987
+        }
+    ],
+    "buffers" : [
+        {
+            "byteLength" : 20160,
+            "uri" : "b_golfball_4_5.bin"
+        }
+    ]
+}

@@ -148,6 +148,7 @@ void Scene::RenderRaytraced(ShaderProgram& shader, Camera& camera, const std::ve
     shader.SetInt("uNumIndices", (int)gpuIndices.size());
     shader.SetInt("uNumNodes", (int)gpuNodes.size());
     shader.SetVec3("uAmbientColor", rtAmbientColor);
+    shader.SetFloat("uAO", uAO);
     for (size_t i = 0; i < textureCache.size() && i < 16; i++) {
         textureCache[i]->Bind(i + 5);
         shader.SetInt(("uTextures[" + std::to_string(i) + "]").c_str(), i + 5);

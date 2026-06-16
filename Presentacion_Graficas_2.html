@@ -3,12 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <title>Análisis del Proyecto: Graficas_2</title>
-    <!-- Highlight.js para sintaxis de código -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
     <script>hljs.highlightAll();</script>
-    <!-- MathJax para fórmulas matemáticas -->
-    <!-- Eliminado polyfill.io por problemas de seguridad/redirecciones -->
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #181a1b; color: #e8e6e3; overflow-x: hidden; scroll-behavior: smooth; }
@@ -37,23 +34,21 @@
 <body>
     <div class="slides-container" id="slides">
         
-        <!-- Lámina 1: Portada -->
         <div class="slide cover-slide" id="slide-0">
             <h1>Graficas_2</h1>
             <h2>Motor de Renderizado Híbrido C++ / OpenGL</h2>
             <p class="content" style="color: #aaa; margin-top: 40px;">Autor: Bryan Silva (UCV)<br>Técnicas de Rasterización y Ray Tracing</p>
         </div>
 
-        <!-- Lámina 2: Arquitectura General -->
         <div class="slide" id="slide-1">
             <h1>1. Arquitectura del Motor</h1>
             <div class="columns content">
                 <div class="col">
-                    <p>El proyecto es un motor híbrido que combina el pipeline tradicional de <strong>Rasterización</strong> con algoritmos de <strong>Ray Tracing</strong> por GPU. Todo se ha diseñado de manera altamente acoplada usando un grafo de escena jerárquico.</p>
+                    <p>El proyecto es un motor híbrido que combina el pipeline tradicional de <strong>Rasterización</strong> con algoritmos de <strong>Ray Tracing</strong> por GPU. Todo se ha diseñado de manera modular usando un grafo de escena jerárquico.</p>
                     <ul>
                         <li><strong>Scene Management:</strong> Abstracción usando nodos y parseo nativo de glTF mediante TinyGLTF.</li>
                         <li><strong>Materiales:</strong> Abstracción física PBR (Cook-Torrance).</li>
-                        <li><strong>Shaders:</strong> Rasterización (Planar, Lambert, Blinn-Phong, PBR) y Compute/Fragment (RayTracing).</li>
+                        <li><strong>Shaders:</strong> Rasterización (Flat, Lambert, Phong, Blinn-Phong, PBR) y Fragment Shader en pantalla completa (Ray Tracing).</li>
                     </ul>
                 </div>
                 <div class="col">
@@ -73,7 +68,6 @@
             </div>
         </div>
 
-        <!-- Lámina 3: Carga de Escenas -->
         <div class="slide" id="slide-2">
             <h1>2. Carga y Serialización (glTF)</h1>
             <div class="columns content">
@@ -100,7 +94,6 @@ if (GetAttributeData("POSITION", dataPtr, stride, model, primitive)) {
             </div>
         </div>
 
-        <!-- Lámina 4: Sólidos de Revolución y Bézier -->
         <div class="slide" id="slide-3">
             <h1>3. Sólidos de Revolución (Bézier)</h1>
             <div class="columns content">
@@ -131,7 +124,6 @@ for (int s = 0; s <= segments; s++) {
             </div>
         </div>
 
-        <!-- Lámina 5: Espacio Tangente (Normal Mapping) -->
         <div class="slide" id="slide-4">
             <h1>4. Cálculo de Espacio Tangente</h1>
             <div class="columns content">
@@ -157,7 +149,6 @@ vertices[i0].tangent += tangent;
             </div>
         </div>
 
-        <!-- Lámina 6: Interacción y Ray Casting -->
         <div class="slide" id="slide-5">
             <h1>5. Interacción: Ray Casting (Mouse Picking)</h1>
             <div class="columns content">
@@ -194,7 +185,6 @@ bool RayTriangleIntersect(Ray ray, vec3 v0, vec3 v1, vec3 v2, out float t, out v
             </div>
         </div>
 
-        <!-- Lámina 7: Iluminación PBR -->
         <div class="slide" id="slide-6">
             <h1>6. Iluminación PBR (Physically Based Rendering)</h1>
             <div class="columns content">
@@ -236,7 +226,6 @@ vec3 F_Schlick(vec3 H, vec3 V, vec3 albedo, float metalic) {
             </div>
         </div>
 
-        <!-- Lámina 8: Esquema PBR -->
         <div class="slide" id="slide-7">
             <h1>7. Esquema Visual: PBR y Vectores</h1>
             <div class="columns content">
@@ -267,7 +256,6 @@ vec3 F_Schlick(vec3 H, vec3 V, vec3 albedo, float metalic) {
             </div>
         </div>
 
-        <!-- Lámina 9: Sombras 1 - Shadow Mapping -->
         <div class="slide" id="slide-8">
             <h1>8. Shadow Mapping Clásico y PCF</h1>
             <div class="columns content">
@@ -278,6 +266,7 @@ vec3 F_Schlick(vec3 H, vec3 V, vec3 albedo, float metalic) {
                     <ul>
                         <li><strong>Shadow Acne:</strong> Se mitiga sumando un <code>Bias</code> pequeño a la comparación de profundidad.</li>
                         <li><strong>Aliasing (Bordes Dentados):</strong> Se aplica <strong>PCF</strong> (Percentage Closer Filtering), haciendo muestreos promediados (Ej. kernel 3x3) en los texels vecinos.</li>
+                        <li><strong>Singularidad del Vector UP:</strong> El motor previene matemáticamente los colapsos de la matriz de vista (NaNs) cuando las luces direccionales o focos apuntan perfectamente hacia el nadir (0, -1, 0), alternando dinámicamente el vector <i>Up</i> al eje Z.</li>
                     </ul>
                 </div>
                 <div class="col">
@@ -298,7 +287,6 @@ return shadowPCF / float(pcfSize * pcfSize);
             </div>
         </div>
 
-        <!-- Lámina 10: Sombras Suaves (PCSS) -->
         <div class="slide" id="slide-9">
             <h1>9. Sombras Suaves (PCSS)</h1>
             <div class="columns content">
@@ -332,7 +320,6 @@ for(int x = -2; x <= 2; x++) {
             </div>
         </div>
 
-        <!-- Lámina 11: Esquema PCSS -->
         <div class="slide" id="slide-10">
             <h1>10. Esquema: Anatomía de la Penumbra (PCSS)</h1>
             <div class="columns content">
@@ -357,7 +344,6 @@ for(int x = -2; x <= 2; x++) {
             </div>
         </div>
 
-        <!-- Lámina 12: Ray Tracing Arquitectura -->
         <div class="slide" id="slide-11">
             <h1>11. Ray Tracing: Arquitectura y Stack Iterativo</h1>
             <div class="columns content">
@@ -398,7 +384,6 @@ while (stackPtr >= 0 && stackPtr < MAX_STACK) {
             </div>
         </div>
 
-        <!-- Lámina 13: Esquema Ray Tracing -->
         <div class="slide" id="slide-12">
             <h1>12. Esquema: Bucle Iterativo Path Tracing</h1>
             <div class="columns content">
@@ -432,96 +417,128 @@ while (stackPtr >= 0 && stackPtr < MAX_STACK) {
             </div>
         </div>
 
-        <!-- Lámina 14: Dieléctricos -->
-        <div class="slide" id="slide-13">
-            <h1>13. Ray Tracing: Refracción y Dieléctricos</h1>
+        <div class="slide" id="slide-rt-shadows">
+            <h1>13. RT: Iluminación Directa y Sombras Hard</h1>
             <div class="columns content">
-                <div class="col" style="flex: 1.1;">
-                    <h2>Simulación de Cristal y Fluidos</h2>
-                    <p>Para procesar cristales o líquidos (<code>matType == 2</code>), la luz debe penetrar la geometría o reflejarse sobre ella dependiendo del ángulo de visión y la densidad del medio.</p>
-                    <ul style="font-size: 0.9em;">
-                        <li><strong>Ley de Snell:</strong> Determina la desviación de la luz usando el Índice de Refracción (IOR) relativo: $\eta = \frac{n_1}{n_2}$. GLSL provee <code>refract(D, N, eta)</code> para este fin.</li>
-                        <li><strong>Reflexión Interna Total (TIR):</strong> Al salir de un medio denso (ej. cristal a aire), si el ángulo supera el ángulo crítico, el rayo se refleja al 100% y no cruza la superficie.</li>
-                        <li><strong>Aproximación de Schlick:</strong> Calcula $R$, la probabilidad/cantidad de luz reflejada vs. refractada ($1-R$). Se apilan ambos rayos modulados por este ratio.</li>
+                <div class="col">
+                    <h2>Rastreo de Sombras Directas</h2>
+                    <p>A diferencia de la rasterización que lee texturas de profundidad, el Ray Tracing determina las sombras lanzando un rayo secundario (<code>shadowRay</code>) desde la superficie del objeto directamente hacia la fuente de luz.</p>
+                    <ul>
+                        <li><strong>Detección de Bloqueos:</strong> Si el <code>shadowRay</code> impacta contra alguna geometría antes de llegar a la luz (<code>distToLight</code>), significa que el camino está bloqueado y el píxel queda en sombra.</li>
+                        <li><strong>Sombras Transparentes:</strong> El motor verifica el material del obstáculo. Si es un cristal (<code>properties.w == 2</code>), el rayo de sombra lo ignora por completo, permitiendo que la luz atraviese los vidrios de la escena.</li>
+                        <li><strong>Corrección de Auto-Sombreado:</strong> Para evitar que la superficie se sombree a sí misma por límites de precisión matemática (Shadow Acne), el inicio del rayo se desplaza microscópicamente (<code>EPSILON</code>) hacia afuera siguiendo la normal.</li>
                     </ul>
                 </div>
-                <div class="col" style="flex: 0.9;">
+                <div class="col">
+                    <div class="mermaid">
+                    graph LR
+                        P[Punto de Intersección] -->|shadowRay| B{¿Choca con algo?}
+                        B -->|No| L[Luz Directa Aplicada]
+                        B -->|Sí| D{¿Distancia < distToLight?}
+                        D -->|No| L
+                        D -->|Sí| M{¿Es Cristal?}
+                        M -->|Sí| L
+                        M -->|No| S[Píxel en Sombra]
+                    </div>
                     <pre><code class="language-glsl">
-// Dieléctricos (Cristal)
+// Lanzamiento del Rayo de Sombra (RTShader.frag)
+vec3 offsetOrigin = hit.point + hit.normal * EPSILON + L * EPSILON;
+Ray shadowRay = Ray(offsetOrigin, L);
+HitRecord shadowHit = TraverseScene(shadowRay);
+
+// Evaluación de Bloqueo
+if (shadowHit.hit && shadowHit.t < distToLight && 
+    int(materials[shadowHit.materialID].properties.w) != 2) {
+    continue; // El camino está bloqueado (Sombra pura)
+}
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide" id="slide-rt-metals">
+            <h1>14. RT: Materiales PBR, Metales y Espejos</h1>
+            <div class="columns content">
+                <div class="col">
+                    <h2>Gestión de Reflexiones y Energía</h2>
+                    <p>El motor clasifica los materiales opacos y reflectantes en dos tipos, controlando cómo el rayo rebota en el entorno:</p>
+                    <div class="formula-box" style="font-size: 0.9em;">
+                        <strong>Energía de Reflexión (Metales):</strong>
+                        $$ E_{ref} = 1.0 - \text{roughness} $$
+                    </div>
+                    <ul>
+                        <li><strong>Espejo Perfecto (Tipo 1):</strong> Rebote matemático puro (ley de reflexión). El <i>throughput</i> del rayo se modula únicamente por el albedo del espejo.</li>
+                        <li><strong>Metales Rugosos (<code>matType == 0</code> y <code>metallic > 0</code>):</strong> Al operar a <strong>1 SPP (Sample Per Pixel)</strong> en tiempo real, carecemos de integración Monte Carlo para difuminar los rayos. Para simular la rugosidad, atenuamos matemáticamente la energía del rayo reflejado base al PBR, evitando el "Síndrome del Espejo Perfecto". Si $E_{ref} \le 0.05$, el rayo se anula por completo, oscureciendo el material.</li>
+                    </ul>
+                </div>
+                <div class="col">
+                    <div class="mermaid">
+                    sequenceDiagram
+                        participant R as Rayo Incidente
+                        participant M as Superficie
+                        participant S as Stack Iterativo
+                        
+                        R->>M: Colisión (matType == 0)
+                        M->>M: Extraer Rugosidad y Metallic
+                        opt reflectionEnergy > 0.05
+                            M->>S: Push(Rayo Reflejado)
+                            Note right of S: Throughput *= F * reflectionEnergy
+                        end
+                        
+                        R->>M: Colisión (matType == 1)
+                        M->>S: Push(Rayo Reflejado Puro)
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide" id="slide-rt-glass">
+            <h1>15. RT: Dieléctricos y Refracción (Cristales)</h1>
+            <div class="columns content">
+                <div class="col">
+                    <h2>Ecuaciones de Fresnel y Snell</h2>
+                    <p>Para el Material Tipo 2 (Cristal), el rayo incidente se divide físicamente en dos caminos: uno que rebota en la superficie (Reflexión) y uno que la penetra (Refracción).</p>
+                    <p>La cantidad de energía para cada camino se determina por la <strong>Aproximación de Schlick</strong>:</p>
+                    <div class="formula-box" style="font-size: 0.85em;">
+                        $$ R(\theta) = R_0 + (1 - R_0)(1 - \cos\theta)^5 $$
+                        $$ R_0 = \left(\frac{1 - \text{IOR}}{1 + \text{IOR}}\right)^2 $$
+                    </div>
+                    <ul>
+                        <li><strong>TIR (Reflexión Interna Total):</strong> Si el rayo intenta salir del cristal a un ángulo rasante, $\sin^2\theta_{t} > 1.0$ y el rayo rebota internamente sin salir ($R = 1.0$).</li>
+                        <li><strong>Split de Rayos:</strong> El motor inyecta dos rayos simultáneos al <i>Stack</i> (si hay espacio). Uno con energía $R$ (reflejo) y otro con $1 - R$ (refracción).</li>
+                    </ul>
+                </div>
+                <div class="col">
+                    <pre><code class="language-glsl">
+// Refracción y Ecuación de Schlick (RTShader.frag)
+float ior = mat.properties.z;
 float eta = hit.frontFace ? (1.0 / ior) : ior;
 vec3 refrDir = refract(current.ray.direction, hit.normal, eta);
 
-float R; // Coeficiente de Fresnel (Schlick)
 float sinT2 = eta * eta * (1.0 - cosTheta * cosTheta);
 if (sinT2 > 1.0 || length(refrDir) == 0.0) {
-    R = 1.0; // TIR: Reflexión Interna Total
+    R = 1.0; // Reflexión Interna Total
 } else {
-    float r0 = pow((1.0 - ior) / (1.0 + ior), 2.0);
-    R = r0 + (1.0 - r0) * pow(1.0 - cosTheta, 5.0);
+    float cosX = (eta > 1.0) ? sqrt(1.0 - sinT2) : cosTheta;
+    float r0 = (1.0 - ior) / (1.0 + ior);
+    R = (r0 * r0) + (1.0 - (r0 * r0)) * pow(1.0 - cosX, 5.0);
 }
 
-// Push Rayo Refractado (penetra)
-if (R < 1.0) {
-    stackPtr++;
-    stack[stackPtr] = StackItem(Ray(hit.point - EPSILON, refrDir), 
-                                current.throughput * (1.0 - R), current.depth + 1);
-}
-// Push Rayo Reflejado (rebota exterior)
-if (R > 0.0) {
-    stackPtr++;
-    stack[stackPtr] = StackItem(Ray(hit.point + EPSILON, refDir), 
-                                current.throughput * R, current.depth + 1);
-}
+// Apilado en el Stack de Rayos
+if (R < 1.0) push(RayoRefractado); // 1.0 - R
+if (R > 0.0) push(RayoReflejado);  // R
                     </code></pre>
                 </div>
             </div>
         </div>
 
-        <!-- Lámina 15: Metales -->
-        <div class="slide" id="slide-14">
-            <h1>14. Ray Tracing: Metales y Espejos</h1>
-            <div class="columns content">
-                <div class="col">
-                    <h2>Reflexión Especular</h2>
-                    <p>Los metales puros y espejos tienen un comportamiento de absorción y rebote totalmente distinto a los no-metales (dieléctricos).</p>
-                    <ul>
-                        <li><strong>Espejo Perfecto (<code>matType == 1</code>):</strong> Toda la luz incidente rebota siguiendo la ley de reflexión: $R = D - 2(N \cdot D)N$. El vector se computa fácilmente con <code>reflect()</code> y se lanza un nuevo rayo al Stack sin pérdida de <i>Throughput</i> más que el albedo.</li>
-                        <li><strong>Metales Rugosos (<code>matType == 0</code> y <code>metallic > 0</code>):</strong> Interpola la reflectancia usando el PBR local, modulando por un $F_0$ coloreado por el Albedo Base. La dispersión disminuye la energía refleja basándose en la <i>Rugosidad</i>.</li>
-                    </ul>
-                </div>
-                <div class="col">
-                    <pre><code class="language-glsl">
-// Espejo Perfecto (matType == 1)
-vec3 refDir = reflect(current.ray.direction, hit.normal);
-Ray refRay = Ray(hit.point + hit.geomNormal * EPSILON, refDir);
-
-stackPtr++; // Agregamos al stack el nuevo rebote
-stack[stackPtr] = StackItem(refRay, current.throughput * baseAlbedo, current.depth + 1);
-
-// Metales PBR (matType == 0, metallic > 0.01)
-// ... se calcula la luz local ...
-vec3 F0 = mix(vec3(0.04), baseAlbedo, metallic);
-vec3 F = F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(1.0 - cosTheta, 5.0);
-float reflectionEnergy = 1.0 - roughness; // A menor rugosidad, más nítido el rayo
-
-if (reflectionEnergy > 0.05) {
-    vec3 refDir = reflect(current.ray.direction, hit.normal);
-    stackPtr++;
-    stack[stackPtr] = StackItem(Ray(hit.point + EPSILON, refDir), 
-                                current.throughput * F * reflectionEnergy, current.depth + 1);
-}
-                    </code></pre>
-                </div>
-            </div>
-        </div>
-
-        <!-- Lámina 16: Conclusiones -->
         <div class="slide" id="slide-15">
-            <h1>15. Rendimiento y Conclusiones</h1>
+            <h1>16. Rendimiento y Conclusiones</h1>
             <div class="columns content">
                 <div class="col">
                     <h2>Observaciones Técnicas</h2>
                     <ul>
+                        <li><strong>Arquitectura Unificada (Paridad Visual):</strong> El mayor éxito del motor es su naturaleza híbrida. Tanto la Rasterización como el Ray Tracer leen exactamente el mismo Grafo de Escena, el mismo BRDF (Cook-Torrance) y los mismos Atlas de Texturas, logrando paridad física entre ambos mundos.</li>
                         <li><strong>Rendimiento:</strong> La rasterización estándar corre sumamente rápida. Sin embargo, el módulo de Ray Tracing decae exponencialmente de acuerdo a la complejidad poligonal de la escena debido a la carencia de estructuras de aceleración eficientes reales como BVH Jerárquicos en el Shader (solo se chequean AABBs lineales simples por nodo).</li>
                         <li><strong>Extensibilidad:</strong> Gracias al robusto parseador glTF abstraído sobre TinyGLTF, el motor está preparado para soportar virtualmente cualquier malla exportada desde Blender.</li>
                         <li><strong>Limitación Estructural:</strong> Por cómo se diseñaron los SSBOs, la limitación máxima de texturas indexables nativamente suele rondar los 16-32 arrays paralelos debido a la arquitectura de OpenGL 4.6 Core.</li>
@@ -539,7 +556,6 @@ if (reflectionEnergy > 0.05) {
 
     </div>
 
-    <!-- Navegación -->
     <div class="nav-buttons">
         <button onclick="prevSlide()">&#8592; Anterior</button>
         <button onclick="nextSlide()">Siguiente &#8594;</button>

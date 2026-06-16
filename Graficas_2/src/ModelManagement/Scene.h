@@ -55,6 +55,7 @@ public:
     GLuint fullscreenVAO = 0;
     GLuint fullscreenVBO = 0;
 	GLint rtMaxBounces = 3;
+	GLfloat uAO = 1.0f;
 	glm::vec3 rtAmbientColor = glm::vec3(0.05f);
 
 private:

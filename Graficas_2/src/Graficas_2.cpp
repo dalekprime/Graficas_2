@@ -472,8 +472,12 @@ void MainEngine::DrawUI() {
         if (selectedNode->material) {
             ImGui::SliderFloat("Metallic", &selectedNode->material->metallicFactor, 0.0f, 1.0f);
             ImGui::SliderFloat("Roughness", &selectedNode->material->roughnessFactor, 0.0f, 1.0f);
-            ImGui::SliderFloat("Ambient Occlusion", &selectedNode->material->aoFactor, 0.0f, 1.0f);
-            ImGui::ColorEdit4("Color Difuso (Base)", &selectedNode->material->baseColorFactor[0]);
+            if (actualCamera->type == CameraType::RAYTRACING) {
+                ImGui::SliderFloat("Ambient Occlusion (Global)", &(actualScene->uAO), 0.0f, 1.0f);
+            } else {
+                ImGui::SliderFloat("Ambient Occlusion", &selectedNode->material->aoFactor, 0.0f, 1.0f);
+            }
+            ImGui::ColorEdit4("Color Difuso", &selectedNode->material->baseColorFactor[0]);
             ImGui::Text("Texturas");
             const char* texTypes[] = { "Base Color", "Normal Map", "PBR Map" };
             for (size_t i = 0; i < 3; ++i) {
