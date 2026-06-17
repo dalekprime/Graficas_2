@@ -276,7 +276,8 @@ void MainEngine::DrawUI() {
         if (shadowModel == 0) {
             ImGui::DragFloat("Altura", &(shadowEngine->groundHeight), 0.05f, -10.0f, 10.0f);
         } else if (shadowModel == 1) {
-            ImGui::DragFloat("Bias Fijo", &(shadowEngine->bias), 0.0001f, 0.0f, 0.01f);
+            ImGui::Checkbox("Front Face Culling", &(shadowEngine->FrontFace));
+            ImGui::DragFloat("Bias Fijo", &(shadowEngine->bias), 0.0001f, 0.0f, 0.03f);
             ImGui::Text("PCF");
             ImGui::RadioButton("Off", &(shadowEngine->pcfSize), 0); ImGui::SameLine();
             ImGui::RadioButton("3X3", &(shadowEngine->pcfSize), 3); ImGui::SameLine();

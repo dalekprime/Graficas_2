@@ -85,11 +85,15 @@ void ShadowEngine::RenderMapping(Scene& scene, Camera& camera, ShaderProgram& ac
 	glClear(GL_DEPTH_BUFFER_BIT);
 	depthShader->Activate();
 	depthShader->SetMatrix4("lightSpaceMatrix", lightSpaceMatrix);
-	glEnable(GL_CULL_FACE);
-	glCullFace(GL_BACK);
+	if (FrontFace) {
+		glEnable(GL_CULL_FACE);
+		glCullFace(GL_FRONT);
+	}
 	scene.Draw(*depthShader, camera, true);
-	glCullFace(GL_BACK);
-	glDisable(GL_CULL_FACE);
+	if (FrontFace) {
+		glCullFace(GL_BACK);
+		glDisable(GL_CULL_FACE);
+	}
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, camera.width, camera.height);
 	actualShader.Activate();

@@ -37,6 +37,7 @@ public:
 	int pcfSize = 3;
 	int pcssSizeBlur = 5;
 	float pcssSize = 100.0f;
+	bool FrontFace = false;
 	ShadowEngine(ShadowType type);
 	~ShadowEngine();
 	void RenderSceneWithShadows(Scene& actualScene, Camera& actualCamera, ShaderProgram& actualShader);
