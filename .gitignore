@@ -427,3 +427,16 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+#Assets
+*.png
+*.jpg
+*.jpeg
+*.glb
+*.bin
+*.gltf
+*.blend
+*.blend1
+*.mtl
+*.obj
+*.fbx
